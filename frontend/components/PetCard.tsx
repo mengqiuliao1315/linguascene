@@ -1,16 +1,15 @@
 /**
- * 首页萌宠卡片：展示刺猬「墩墩」，支持改名。
+ * 首页萌宠卡片：展示刺猬「墩墩」，支持改名和每天喂一次。
  *
  * 名字默认是墩墩：后端 pet_name 为空时回落到 DEFAULT_PET_NAME，
  * 用户点一下名字（旁边有个灰色小铅笔提示可点）就能改，改完写回后端。
  *
- * 心情过渡：/api/pet 会返回「见面前」的旧心情。挂载后先播旧心情
- * （比如难过、想你），几百毫秒后再切到新心情，并撒一圈爱心——
- * 用户看到的是「它本来不开心，我来了它就高兴了」。
- * 心情只驱动动画和问候语，不再在卡片上写心情标签/文案。
+ * 进页面先打招呼：站定后笑一下，气泡说一句英文。今天还没喂时，
+ * 招呼说完就回到 hungry——眼睛耷下来，按钮可以喂。喂过之后按钮变灰，
+ * 同一天再点不会再吃一次。
  *
- * 打招呼一律用英文：这是英语学习站，让用户先被一句地道问候撞一下。
- * 文案按心情分档，饥饿那档随喂食功能一起下线了。
+ * 心情过渡：/api/pet 会返回「见面前」的旧心情。久别重逢时先播难过，
+ * 再切到今天的心情并撒一圈爱心。卡片上不写心情标签。
  */
 
 "use client";
@@ -32,9 +31,14 @@ const MOOD_SWITCH_MS = 900;
 const GREET_DELAY_MS = 620;
 /** 气泡停留时长，与 pet-bubble 动画时长一致 */
 const BUBBLE_MS = 3600;
+/** 喂下去之后啃苹果的时长 */
+const MUNCH_MS = 1600;
 
-/** 见面第一句话（英文）：久别重逢优先，其余按心情说。 */
+/** 见面第一句话（英文）：饿着优先，久别重逢其次，其余按心情说。 */
 function greetingFor(mood: PetMood, pet: PetState): string {
+  if (!pet.fed_today) {
+    return "Hi! I saved you a spot... and my tummy is empty.";
+  }
   if (pet.previous_mood === "sad" && pet.days_away > 0) {
     return `You're back! I waited ${pet.days_away} day${pet.days_away > 1 ? "s" : ""} for you.`;
   }
@@ -47,9 +51,18 @@ function greetingFor(mood: PetMood, pet: PetState): string {
       return "There you are! Let's start together!";
     case "sad":
       return "You're back... I've been waiting for you.";
+    case "hungry":
+      return "Hi! I saved you a spot... and my tummy is empty.";
     default:
       return "Hi! Ready to learn something new today?";
   }
+}
+
+function fedLine(pet: PetState): string {
+  if (pet.feed_streak > 1) {
+    return `今天喂过了 · 连续 ${pet.feed_streak} 天`;
+  }
+  return "今天喂过了，明天再来";
 }
 
 export function PetCard() {
@@ -60,8 +73,10 @@ export function PetCard() {
   const [draftName, setDraftName] = useState("");
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
-  // 打招呼：气泡文案，进页面一次就收场
   const [greeting, setGreeting] = useState("");
+  const [waving, setWaving] = useState(false);
+  const [munching, setMunching] = useState(false);
+  const [feeding, setFeeding] = useState(false);
   // 严格模式下 effect 会跑两次；只让第一次真正发起请求和记录到访。
   const started = useRef(false);
 
@@ -74,12 +89,11 @@ export function PetCard() {
       .then((state) => {
         setPet(state);
         setDraftName(state.name);
-        // 先播见面前的心情，再切到今天的心情
+        // 先播见面前的心情。今天还没喂时，见面之后落到 hungry，而不是陪伴天数的开心档。
         const before = state.previous_mood;
         setMood(before ?? state.mood);
         setLoaded(true);
 
-        // 到访记在拿到旧心情之后：这样即便重复请求，也只记录一次今天来过
         void petApi.visit().catch(() => {
           // 记录失败不影响展示，下次打开首页会补上
         });
@@ -87,15 +101,17 @@ export function PetCard() {
         if (before && before !== state.mood) {
           window.setTimeout(() => {
             setMood(state.mood);
-            // 只有「久别重逢」才撒花，日常打招呼不必
             if (before === "sad") setCelebrate(true);
           }, MOOD_SWITCH_MS);
         }
 
-        // 站定之后开口打招呼；气泡到点自己收场
         window.setTimeout(() => {
           setGreeting(greetingFor(state.mood, state));
-          window.setTimeout(() => setGreeting(""), BUBBLE_MS);
+          setWaving(true);
+          window.setTimeout(() => {
+            setGreeting("");
+            setWaving(false);
+          }, BUBBLE_MS);
         }, GREET_DELAY_MS);
       })
       .catch((err) => {
@@ -126,6 +142,30 @@ export function PetCard() {
     }
   };
 
+  const feed = async () => {
+    if (!pet || pet.fed_today || feeding) return;
+    setFeeding(true);
+    setError("");
+    try {
+      const next = await petApi.feed();
+      setPet(next);
+      setMood(next.mood);
+      setMunching(true);
+      setCelebrate(true);
+      setGreeting("Yum! That's my apple for today.");
+      setWaving(true);
+      window.setTimeout(() => setMunching(false), MUNCH_MS);
+      window.setTimeout(() => {
+        setGreeting("");
+        setWaving(false);
+      }, BUBBLE_MS);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "喂食失败");
+    } finally {
+      setFeeding(false);
+    }
+  };
+
   if (!loaded) {
     return (
       <section className="card flex h-full flex-col justify-center space-y-4 p-5">
@@ -150,9 +190,7 @@ export function PetCard() {
     // 它和热力图同排，会被拉伸到一样高；纵向居中，别让内容顶在上面
     <section className="card flex h-full flex-col justify-center space-y-4 p-5">
       <div className="flex flex-col items-center gap-3">
-        {/* 点击宠物也撒个花，满足随手逗一下的冲动 */}
         <div className="relative">
-          {/* 外层只管水平居中，动画放内层，免得 transform 互相覆盖 */}
           {greeting ? (
             <div className="pointer-events-none absolute -top-9 left-1/2 z-10 -translate-x-1/2">
               <div className="pet-bubble relative whitespace-nowrap rounded-2xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-md">
@@ -167,7 +205,13 @@ export function PetCard() {
             className="block transition hover:scale-105"
             title="摸摸它"
           >
-            <Pet mood={mood} celebrate={celebrate} className="h-32 w-32" />
+            <Pet
+              mood={mood}
+              celebrate={celebrate}
+              greeting={waving}
+              munching={munching}
+              className="h-32 w-32"
+            />
           </button>
         </div>
 
@@ -197,7 +241,6 @@ export function PetCard() {
               title="点一下改名"
             >
               {displayName}
-              {/* 灰色小铅笔：提示这名字可以点着改 */}
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
@@ -214,6 +257,19 @@ export function PetCard() {
             </button>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={() => void feed()}
+          disabled={pet.fed_today || feeding}
+          className={
+            pet.fed_today
+              ? "btn-ghost cursor-default px-3 py-1.5 text-xs text-slate-400"
+              : "btn-primary px-3 py-1.5 text-xs"
+          }
+        >
+          {pet.fed_today ? fedLine(pet) : feeding ? "正在喂…" : "🍎 喂一个苹果"}
+        </button>
 
         <div className="flex w-full flex-wrap justify-center gap-2 text-[11px]">
           <span className="chip-slate">🗓️ 连续陪伴 {pet.login_streak} 天</span>

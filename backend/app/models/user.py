@@ -57,12 +57,12 @@ class User(Base):
     # 萌宠：只剩刺猬一个形象，默认叫「墩墩」，pet_name 为空表示用户没改过名，
     # 由前端回落到默认称呼。心情与连续陪伴天数来自「有没有回来看它」，
     # 由 pet_service 在 /api/pet 里维护，和打卡用的 streak 是两套口径。
+    # 喂食每天一次：pet_last_fed 是 UTC 日历日，不是今天则心情为 hungry。
     pet_species: Mapped[str] = mapped_column(String(32), default="hedgehog")
     pet_name: Mapped[str] = mapped_column(String(32), default="")
     last_login_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     login_streak: Mapped[int] = mapped_column(Integer, default=0)
     best_login_streak: Mapped[int] = mapped_column(Integer, default=0)
-    # 喂食功能已下线，这两列只为兼容老库保留，不再读写。
     pet_last_fed: Mapped[str | None] = mapped_column(String(10), nullable=True)
     pet_feed_streak: Mapped[int] = mapped_column(Integer, default=0)
 

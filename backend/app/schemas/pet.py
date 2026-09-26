@@ -14,6 +14,10 @@ class PetOut(BaseModel):
     best_login_streak: int = 0
     study_streak: int = 0
     last_login_date: str | None = None
+    # 今天还没喂时 mood 是 hungry；同一天再喂不会改 feed_streak
+    fed_today: bool = False
+    feed_streak: int = 0
+    last_fed_date: str | None = None
 
 
 class UpdatePetRequest(BaseModel):
