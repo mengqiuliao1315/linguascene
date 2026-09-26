@@ -1,0 +1,299 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- 皮肤（主题）色阶 ----------
+   brand-50 ~ brand-900 全部由这里的 CSS 变量提供（见 tailwind.config.ts），
+   切换 <html data-theme="code"> 即可整站换肤。:root 是默认皮肤 ocean。
+   色阶按「600 = 主色、100 = 浅色底」对齐后端给的两款预览色。
+   新增皮肤要同时改三处：
+     1. backend/app/services/levels.py 的 THEMES（code / name / 预览色块）
+     2. 这里补一个 [data-theme="code"] 色阶
+     3. frontend/lib/theme.ts 的 THEME_CODES（校验用，防止写入未知皮肤）
+   变量值写成 "R G B" 三元组，Tailwind 才能拼出 rgb(... / <alpha-value>)。 */
+:root {
+  --brand-50: 239 246 255;
+  --brand-100: 219 234 254;
+  --brand-200: 191 219 254;
+  --brand-300: 147 197 253;
+  --brand-400: 96 165 250;
+  --brand-500: 59 130 246;
+  --brand-600: 37 99 235;
+  --brand-700: 29 78 216;
+  --brand-800: 30 64 175;
+  --brand-900: 30 58 138;
+}
+
+[data-theme="sky"] {
+  --brand-50: 240 249 255;
+  --brand-100: 224 242 254;
+  --brand-200: 186 230 253;
+  --brand-300: 125 211 252;
+  --brand-400: 56 189 248;
+  --brand-500: 14 165 233;
+  --brand-600: 2 132 199;
+  --brand-700: 3 105 161;
+  --brand-800: 7 89 133;
+  --brand-900: 12 74 110;
+}
+
+[data-theme="night"] {
+  --brand-50: 238 242 255;
+  --brand-100: 199 210 254;
+  --brand-200: 165 180 252;
+  --brand-300: 129 140 248;
+  --brand-400: 99 102 241;
+  --brand-500: 67 56 202;
+  --brand-600: 30 58 138;
+  --brand-700: 27 50 120;
+  --brand-800: 23 37 84;
+  --brand-900: 15 23 42;
+}
+
+[data-theme="coffee"] {
+  --brand-50: 255 251 235;
+  --brand-100: 254 243 199;
+  --brand-200: 253 230 138;
+  --brand-300: 125 211 252;
+  --brand-400: 56 189 248;
+  --brand-500: 2 132 199;
+  --brand-600: 3 105 161;
+  --brand-700: 7 89 133;
+  --brand-800: 12 74 110;
+  --brand-900: 8 47 73;
+}
+
+[data-theme="forest"] {
+  --brand-50: 240 253 250;
+  --brand-100: 204 251 241;
+  --brand-200: 153 246 228;
+  --brand-300: 94 234 212;
+  --brand-400: 45 212 191;
+  --brand-500: 20 184 166;
+  --brand-600: 13 148 136;
+  --brand-700: 15 118 110;
+  --brand-800: 17 94 89;
+  --brand-900: 19 78 74;
+}
+
+[data-theme="sakura"] {
+  --brand-50: 253 242 248;
+  --brand-100: 252 231 243;
+  --brand-200: 251 207 232;
+  --brand-300: 199 210 254;
+  --brand-400: 129 140 248;
+  --brand-500: 99 102 241;
+  --brand-600: 79 70 229;
+  --brand-700: 67 56 202;
+  --brand-800: 55 48 163;
+  --brand-900: 49 46 129;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+}
+
+::selection {
+  @apply bg-brand-200 text-brand-900;
+}
+
+/* 自定义鼠标特效启用时隐藏系统光标：类由 CuteCursor 挂到 <html>，
+   触屏设备或组件未挂载时不会生效，避免出现「没有光标」的裸奔状态。 */
+.cute-cursor-active,
+.cute-cursor-active * {
+  cursor: none !important;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-card;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+  }
+
+  .btn-ghost {
+    @apply btn border border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  .chip-brand {
+    @apply chip bg-brand-50 text-brand-700;
+  }
+
+  .chip-slate {
+    @apply chip bg-slate-100 text-slate-600;
+  }
+
+  .section-title {
+    @apply text-sm font-semibold text-slate-500;
+  }
+
+  /* 音量滑块：交给原生 range + accent-color 上色，轨道与滑块自动跟随品牌色，
+     比自定义伪元素更省事，也不会在 Firefox 上把滑块弄丢。 */
+  .range-brand {
+    @apply h-1.5 cursor-pointer rounded-full outline-none;
+    /* 不能写 theme("colors.brand.500")：变量色阶带 <alpha-value> 占位符，
+       直接吐到 CSS 属性里会变成非法值。这里手动拼。 */
+    accent-color: rgb(var(--brand-500));
+  }
+
+  .range-brand:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+}
+
+/* 帖子正文（Markdown 渲染结果）：图片自适应卡片宽度，链接保持蓝白基调。 */
+.post-body img {
+  @apply my-1 max-h-[520px] w-auto max-w-full rounded-xl border border-slate-200;
+}
+
+.post-body a {
+  @apply break-words font-medium text-brand-600 underline decoration-brand-200 underline-offset-2 hover:text-brand-700 hover:decoration-brand-400;
+}
+
+.post-body code {
+  @apply rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] text-slate-700;
+}
+
+/* ---------- 萌宠动画 ----------
+   全部走 CSS，组件只负责切 class；关掉动效偏好时下面统一降级。 */
+@keyframes pet-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pet-hop {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  30% { transform: translateY(-13px) scaleY(1.05); }
+  55% { transform: translateY(0) scaleY(0.94); }
+  70% { transform: translateY(-4px) scaleY(1); }
+}
+
+@keyframes pet-pop {
+  0% { transform: translateY(6px) scale(0.75); opacity: 0; }
+  55% { transform: translateY(-5px) scale(1.12); opacity: 1; }
+  100% { transform: translateY(-11px) scale(1); opacity: 0; }
+}
+
+@keyframes pet-tear {
+  0%, 60% { transform: translateY(0) scale(0.9); opacity: 0; }
+  75% { opacity: 0.95; }
+  100% { transform: translateY(16px) scale(1.05); opacity: 0; }
+}
+
+@keyframes pet-shiver {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-1.6px); }
+  75% { transform: translateX(1.6px); }
+}
+
+@keyframes pet-burst {
+  0% { transform: scale(0.4); opacity: 0; }
+  45% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* 进场：从卡片外蹦到你面前，只播一次 */
+@keyframes pet-enter {
+  0% { transform: translateY(46px) scale(0.72); opacity: 0; }
+  55% { transform: translateY(-9px) scale(1.06); opacity: 1; }
+  75% { transform: translateY(0) scale(0.98); }
+  88% { transform: translateY(-3px) scale(1.01); }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* 呼吸：只让肚子轻轻起伏，头不跟着放大 */
+@keyframes pet-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+
+/* 打招呼气泡：弹出 -> 停留 -> 淡出，正好和挥爪同时收场 */
+@keyframes pet-bubble {
+  0% { transform: translateY(6px) scale(0.82); opacity: 0; }
+  10% { transform: translateY(0) scale(1.05); opacity: 1; }
+  18% { transform: translateY(0) scale(1); opacity: 1; }
+  82% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-4px) scale(0.96); opacity: 0; }
+}
+
+.pet-float { animation: pet-float 3.2s ease-in-out infinite; }
+.pet-hop { animation: pet-hop 0.62s ease-in-out infinite; }
+.pet-shiver { animation: pet-shiver 0.16s linear infinite; }
+.pet-mood-happy { animation: pet-float 2.6s ease-in-out infinite; }
+.pet-mood-sad { animation: pet-shiver 0.9s ease-in-out infinite; }
+.pet-enter { animation: pet-enter 0.95s cubic-bezier(0.22, 1.2, 0.36, 1) 1; }
+.pet-breathe { animation: pet-breathe 3.6s ease-in-out infinite; transform-origin: 50% 88%; }
+.pet-bubble { animation: pet-bubble 3.6s ease-in-out 1 forwards; transform-origin: 50% 100%; }
+
+/* 热力图悬停的日期提示：轻微上浮淡入，比浏览器原生 title 更精致 */
+@keyframes heat-tip-in {
+  from { transform: translateY(3px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.heat-tip { animation: heat-tip-in 0.14s ease-out both; }
+
+/* 成就解锁提示：从上方轻轻落下，关掉动效偏好时直接静态显示 */
+@keyframes achv-toast-in {
+  from { transform: translateY(-14px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.achv-toast { animation: achv-toast-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-float,
+  .pet-hop,
+  .pet-shiver,
+  .pet-mood-happy,
+  .pet-mood-sad,
+  .pet-enter,
+  .pet-breathe,
+  .heat-tip,
+  .achv-toast {
+    animation: none;
+  }
+
+  /* 气泡不能只靠动画显示：它的关键帧从 opacity:0 起步，一旦动画被关掉
+     或时间轴不推进，问候语就会永远停在透明上。这里直接给静态可见态。 */
+  .pet-bubble {
+    animation: none;
+    opacity: 1;
+  }
+}

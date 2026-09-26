@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+backend/.env
+backend/storage/
+backend/linguascene.db
+
+# Node
+node_modules/
+.next/
+out/
+frontend/.env.local
+*.tsbuildinfo
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local rollback copies
+rollback/
