@@ -1,7 +1,3 @@
-/**
- * 供应商图标：统一的圆角方块 + 品牌色，用首字代替各家 logo。
- */
-
 import type { AiPreset } from "@/lib/aiFormats";
 
 export function AiProviderIcon({

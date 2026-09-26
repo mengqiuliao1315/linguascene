@@ -9,7 +9,6 @@ from app.models.user import User
 from app.schemas.learning import ConversationOut, ScenarioOut
 from app.services import audio_service
 
-# 序列化逻辑收敛到 services；这里保留同名导入，兼容 dashboard / conversations 的引用
 from app.services.scenarios import scenario_payload
 
 router = APIRouter(prefix="/api/scenarios", tags=["scenarios"])
@@ -38,12 +37,12 @@ def get_scenario(
     _user: User = Depends(get_current_user),
 ) -> ScenarioOut:
     scenario = db.execute(
-        select(Scenario).where(Scenario.id == scenario_id)
+        select(Scenario).where(
+            Scenario.id == scenario_id, Scenario.is_published.is_(True)
+        )
     ).scalar_one_or_none()
     if not scenario:
         raise HTTPException(status_code=404, detail="场景不存在")
 
-    # 用户点开场景详情，接着多半就是「开始对话」并听到这句开场白。趁他读说明的
-    # 时候先把音频合成好（后台线程，这里不等），进对话页时就是即时出声。
     audio_service.prewarm_text(scenario.opening_line)
     return ScenarioOut.model_validate(scenario_payload(scenario))

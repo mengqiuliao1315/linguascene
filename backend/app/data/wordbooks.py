@@ -1,23 +1,3 @@
-"""词书定义与单词数据。
-
-- BOOKS: 词书元数据（四级 / 六级 / 新概念三 / 雅思）
-- WORDS: 按词书 code 分组的单词列表
-
-字段说明：
-    word   单词
-    uk     英式音标
-    us     美式音标
-    pos    词性
-    zh     中文释义
-    en     英文释义
-    ex     例句列表 [{en, zh}]
-    unit   所属单元
-    tags   标签（逗号分隔）
-
-需要导入完整词表时，可用 `python -m app.import_words <文件.json>`，
-文件格式为 {book_code: [单词对象, ...]}。
-"""
-
 BOOKS = [
     {
         "code": "cet4",
@@ -515,7 +495,3 @@ WORDS["cet6"] += [
         "tags": "advanced,noun",
     },
 ]
-
-# 完整词表由脚本生成到 app/data/{code}.json，seed 时自动读取，这里不再维护示例数据：
-# - 新概念三（1047 词，覆盖教材 60 课）：app/fetch_nce3_words.py
-# - 雅思（ECDICT 的 ielts 标签）：app/fetch_cet_words.py

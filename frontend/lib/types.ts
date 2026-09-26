@@ -122,23 +122,16 @@ export interface ChatResponse {
   completed_tasks: string[];
 }
 
-/**
- * 流式对话的第一帧：AI 这一轮说的话已经落库，反馈还在路上。
- *
- * 拆成两帧是为了让 AI 尽快开口——回复那一路的模型输出只有一句话，
- * 比连纠错、点评、提示一起算完快得多。
- */
 export interface ChatReplyEvent {
   user_message: Message;
   ai_message: Message;
-  /** 本地规则算出的提示，先顶上；模型那条更贴合的随反馈帧覆盖 */
+
   hint: ScenarioHint | null;
   task_progress: number;
   task_completed: boolean;
   completed_tasks: string[];
 }
 
-/** 流式对话的第二帧：纠错、地道表达、新词、点评与下一步提示。 */
 export interface ChatFeedbackEvent {
   correction: Correction | null;
   natural_expression: NaturalExpression | null;
@@ -270,15 +263,6 @@ export interface Dashboard {
   review_due_count: number;
 }
 
-export interface LeaderboardEntry {
-  rank: number;
-  user_id: number;
-  username: string;
-  avatar: string | null;
-  xp: number;
-  is_me: boolean;
-}
-
 export interface Achievement {
   code: string;
   name: string;
@@ -286,7 +270,7 @@ export interface Achievement {
   icon: string;
   unlocked: boolean;
   unlocked_at: string | null;
-  // 未解锁时展示进度；已解锁时 progress === target
+
   progress: number;
   target: number;
 }
@@ -332,9 +316,9 @@ export interface ConversationSummary {
   xp_earned: number;
   started_at: string;
   finished_at: string | null;
-  /** 最后一条消息的时间：历史列表显示的就是它，而不是开始时间。 */
+
   last_message_at: string;
-  /** 用户说的第一句话，自由对话靠它区分是哪一次聊天。 */
+
   preview: string;
 }
 
@@ -361,9 +345,6 @@ export interface CreatedCredentials {
   password: string;
 }
 
-// ------------------------------------------------------------------ AI 模型设置
-
-/** 接入协议。绝大多数兼容服务都走 openai。 */
 export type AiApiFormat =
   | "openai"
   | "openai_responses"
@@ -375,29 +356,28 @@ export interface AiProviderConfig {
   name: string;
   base_url: string;
   api_format: AiApiFormat;
-  /** 这条供应商下可选的模型名 */
+
   models: string[];
-  /** 当前用这条供应商里的哪个模型 */
+
   active_model: string;
   key_hint: string;
-  /** 是否是当前实际生效的那条 */
+
   is_active: boolean;
   updated_at: string | null;
 }
 
-/** 实际生效的来源：自己的供应商 / 采纳的分享 / 站点兜底 / 离线规则引擎 */
 export type AiSource = "user" | "share" | "env" | "mock";
 
 export interface AiStatus {
-  /** 我接入的供应商，一人可有多条 */
+
   configs: AiProviderConfig[];
   active_source: AiSource;
   active_label: string;
   active_config_id: number | null;
   active_share_id: number | null;
-  /** 别人分享出来、我尚可使用的模型 + 我分享出去的 */
+
   shares: AiShare[];
-  /** 我当前采纳的那条分享；已被分享者停用/删除时 is_active=false */
+
   adopted_share: AiShare | null;
 }
 
@@ -413,19 +393,18 @@ export interface AiProviderConfigInput {
 export interface AiConnectionResult {
   success: boolean;
   message: string;
-  /** ok：一次往返走通；warn：地址与 Key 没问题，只是模型这次太慢；fail：明确失败 */
+
   status?: "ok" | "warn" | "fail";
-  /** 失败且像模型名的问题时，服务端带回来的真实模型名，可一键加入列表 */
+
   suggested_models?: string[];
 }
 
-/** 测试连接/拉取模型列表：api_key 留空表示沿用 config_id 里已保存的 Key。 */
 export interface AiModelListInput {
   base_url: string;
   api_key: string;
   api_format: AiApiFormat;
   config_id?: number | null;
-  /** 只有测试连接需要 */
+
   model?: string;
 }
 
@@ -435,9 +414,6 @@ export interface AiModelListResult {
   models: string[];
 }
 
-// ------------------------------------------------------------------ AI 模型分享
-
-/** 一条用户分享出来的模型接入信息。Key 永不回传，只有指纹尾号。 */
 export interface AiShare {
   id: number;
   owner_id: number;
@@ -462,47 +438,14 @@ export interface AiShareList {
   adopted_id: number | null;
 }
 
-/** 登录后的分享弹窗。available=false 时不弹。 */
 export interface AiSharePrompt {
   available: boolean;
   share: AiShare | null;
   reason: string;
 }
 
-/** 创建分享：把自己的一条供应商配置分享出去，Key 由服务端取出。 */
 export interface AiShareInput {
   config_id: number;
   title?: string;
   note?: string;
-}
-
-// 管理员场景管理：比普通 Scenario 多出提示词与发布状态
-export interface AdminScenario extends Scenario {
-  ai_role_prompt: string;
-  is_published: boolean;
-}
-
-export interface ScenarioTaskInput {
-  description: string;
-  required: boolean;
-}
-
-export interface ScenarioInput {
-  slug?: string;
-  title: string;
-  title_zh?: string;
-  description?: string;
-  category?: string;
-  icon?: string;
-  level?: CefrLevel;
-  difficulty?: number;
-  estimated_minutes?: number;
-  ai_role?: string;
-  ai_role_prompt?: string;
-  opening_line?: string;
-  goal?: string;
-  key_phrases?: string[];
-  key_vocabulary?: string[];
-  tasks?: ScenarioTaskInput[];
-  is_published?: boolean;
 }

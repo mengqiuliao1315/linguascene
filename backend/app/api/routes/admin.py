@@ -1,10 +1,9 @@
-"""管理员账号管理：内部站点不开放注册，账号统一由这里创建与分发。"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_admin_user
+from app.core.crypto import decrypt_secret
 from app.core.database import get_db
 from app.core.security import apply_password
 from app.models.user import User
@@ -74,12 +73,36 @@ def create_user(
     db.commit()
     db.refresh(user)
 
-    # 同时回传明文，省得管理员再去列表里找一次
     return CreatedCredentials(
         id=user.id,
         username=user.username,
         email=user.email,
         password=payload.password,
+    )
+
+
+@router.get("/users/{user_id}/credentials", response_model=CreatedCredentials)
+def read_credentials(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(get_admin_user),
+) -> CreatedCredentials:
+    """只读地取回账号凭据，用于分享；不会改动密码。"""
+    user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    password = decrypt_secret(user.password_enc or "")
+    if not password:
+        raise HTTPException(
+            status_code=409,
+            detail="该账号没有可读取的密码，请先用「改密码」设置一个新密码",
+        )
+    return CreatedCredentials(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        password=password,
     )
 
 
@@ -119,7 +142,6 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 不能把最后一个管理员降级，避免把自己锁在门外
     if user.id == admin.id and payload.role is not None and payload.role != "ADMIN":
         raise HTTPException(status_code=400, detail="不能取消自己的管理员权限")
 
@@ -163,7 +185,6 @@ def update_role(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 不允许把自己降级，避免把最后一个管理员锁在门外
     if user.id == admin.id and payload.role != "ADMIN":
         raise HTTPException(status_code=400, detail="不能取消自己的管理员权限")
 
@@ -186,6 +207,5 @@ def delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    # 会话、词库、成就、XP 记录等均带 ON DELETE CASCADE，会随之清理
     db.delete(user)
     db.commit()

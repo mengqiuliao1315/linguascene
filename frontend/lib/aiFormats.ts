@@ -1,16 +1,9 @@
-/**
- * AI 接入格式与常见服务商预设。
- *
- * 一个凭据由 Base URL、接入协议（api_format）和 Key 三部分组成：
- * 只要服务端兼容下面某种协议，就能接入；官方直连与各类兼容服务一视同仁。
- */
-
 import type { AiApiFormat } from "@/lib/types";
 
 export interface AiFormatOption {
   value: AiApiFormat;
   label: string;
-  /** 该协议对应的端点，展示在选项里方便对照 */
+
   endpoint: string;
 }
 
@@ -40,19 +33,19 @@ export const AI_FORMAT_OPTIONS: AiFormatOption[] = [
 export const DEFAULT_AI_FORMAT: AiApiFormat = "openai";
 
 export interface AiPreset {
-  /** 稳定标识，用作列表 key */
+
   key: string;
   label: string;
-  /** 目录里的分组标题 */
+
   group: string;
   base_url: string;
   model: string;
   api_format: AiApiFormat;
-  /** 图标方块的完整 class（底色 + 文字色） */
+
   accent: string;
-  /** 图标里显示的字 */
+
   initial: string;
-  /** 自定义供应商：地址与模型名留空，交给用户自己填 */
+
   custom?: boolean;
 }
 
@@ -62,7 +55,6 @@ export function presetsByGroup(group: string): AiPreset[] {
   return AI_PRESETS.filter((preset) => preset.group === group);
 }
 
-/** 一键填充用的常见服务商。地址与模型名都可以在表单里改。 */
 export const AI_PRESETS: AiPreset[] = [
   {
     key: "deepseek",
@@ -191,17 +183,10 @@ export function formatLabel(value: string): string {
   return AI_FORMAT_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
-/**
- * 地址的短写法：去掉协议与尾斜杠，只留域名和路径。
- *
- * 卡片上要能一眼看出「选这个会填进去哪个地址」，`https://api.siliconflow.cn/v1`
- * 太长，`api.siliconflow.cn/v1` 正好。
- */
 export function shortBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 }
 
-/** 格式短名：卡片角落只放非默认格式（Anthropic / Gemini 这些），避免满屏「OpenAI 兼容」。 */
 export function formatShortLabel(value: AiApiFormat): string {
   return (
     {

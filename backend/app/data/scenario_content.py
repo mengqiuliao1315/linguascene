@@ -1,12 +1,4 @@
-"""每个场景任务的离线内容：提问、中文翻译、提示、完成判定。
-
-TASKS 是唯一数据源。rule_engine 从这里派生 TASK_HINTS / TASK_QUESTIONS /
-TASK_INTENT_PATTERNS / QUESTION_ZH，避免四份并行的字典各自漂移。
-task_key 必须与 scenarios.py 里的任务键一一对应，缺一个提示卡就会空白。
-"""
-
 TASKS: dict[str, dict] = {
-    # ---------------------------------------------------------- 咖啡店点单
     "choose_drink": {
         "question_en": "Sure. What would you like to drink today?",
         "question_zh": "好的，您今天想喝点什么？",
@@ -55,7 +47,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "I'll pay by card.",
         "intents": [r"\b(pay|card|cash|apple pay|credit|receipt)\b"],
     },
-    # ---------------------------------------------------------- 机场值机
     "show_ticket": {
         "question_en": "May I see your ticket and passport, please?",
         "question_zh": "可以出示一下您的机票和护照吗？",
@@ -104,7 +95,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "How long does security take?",
         "intents": [r"security|liquids|boarding time|departure time"],
     },
-    # ---------------------------------------------------------- 酒店入住
     "give_reservation": {
         "question_en": "Welcome! Do you have a reservation with us?",
         "question_zh": "欢迎！请问您在我们这里有预订吗？",
@@ -153,7 +143,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "What time is check-out?",
         "intents": [r"check-?out|late checkout|checkout time"],
     },
-    # ---------------------------------------------------------- 餐厅点餐
     "ask_menu": {
         "question_en": "Here's the menu. Take your time.",
         "question_zh": "这是菜单，您慢慢看。",
@@ -202,7 +191,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "I'll pay by card, and add a 10% tip.",
         "intents": [r"\btip\b|\bcard\b|\bcash\b|keep the change"],
     },
-    # ---------------------------------------------------------- 求职面试
     "self_intro": {
         "question_en": "Thanks for coming in. Could you start by telling me about yourself?",
         "question_zh": "感谢你来面试。可以先介绍一下你自己吗？",
@@ -251,7 +239,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "What are the next steps?",
         "intents": [r"next step|next steps|hear back|when.*hear|follow up"],
     },
-    # ---------------------------------------------------------- 超市购物
     "find_item": {
         "question_en": "Sure! What are you looking for?",
         "question_zh": "好的！您在找什么？",
@@ -300,7 +287,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "I'll pay by card.",
         "intents": [r"\bpay\b|\bcard\b|\bcash\b|receipt"],
     },
-    # ---------------------------------------------------------- 打车出行
     "state_destination": {
         "question_en": "Hop in! Where to?",
         "question_zh": "上车吧！去哪儿？",
@@ -349,7 +335,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "Card, please. Could I get a receipt?",
         "intents": [r"\bcard\b|\bcash\b|receipt|keep the change|here you go"],
     },
-    # ---------------------------------------------------------- 看医生
     "describe_symptom": {
         "question_en": "I see. Can you tell me what's bothering you?",
         "question_zh": "我明白了。能说说你哪里不舒服吗？",
@@ -398,7 +383,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "Do I need a follow-up visit?",
         "intents": [r"follow-?up|come back|appointment|\bagain\b|next visit"],
     },
-    # ---------------------------------------------------------- 银行办事
     "state_purpose": {
         "question_en": "Good morning. How can I help you today?",
         "question_zh": "早上好。今天有什么可以帮您？",
@@ -447,7 +431,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "When will I get the card?",
         "intents": [r"when will|how long does it take|confirm|next step|details"],
     },
-    # ---------------------------------------------------------- 租房看房
     "ask_rent": {
         "question_en": "The rent is 1,800 a month. What else would you like to know?",
         "question_zh": "月租 1800。您还想了解什么？",
@@ -496,7 +479,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "Can I move in on the first of next month?",
         "intents": [r"move in|moving in|when can i|available from|first of"],
     },
-    # ---------------------------------------------------------- 团队会议
     "give_update": {
         "question_en": "Let's get started. Could you give us a quick update on your work?",
         "question_zh": "我们开始吧。可以简单说说你手上的进展吗？",
@@ -545,7 +527,6 @@ TASKS: dict[str, dict] = {
         "suggested_en": "Can we finish by next Friday?",
         "intents": [r"by (next |this )?(monday|tuesday|wednesday|thursday|friday|week|month)|deadline|\bdue\b|when can"],
     },
-    # ---------------------------------------------------------- 聚会闲聊
     "greet_host": {
         "question_en": "Make yourself at home! Can I get you something to drink?",
         "question_zh": "别客气，就当自己家！要给你拿点喝的吗？",
@@ -596,8 +577,6 @@ TASKS: dict[str, dict] = {
     },
 }
 
-
-# ------------------------------------------------- 场景高频表达（按 slug）
 
 SCENARIO_EXPRESSIONS: dict[str, list[tuple[str, str, str]]] = {
     "ordering-coffee": [
@@ -683,8 +662,6 @@ SCENARIO_EXPRESSIONS: dict[str, list[tuple[str, str, str]]] = {
     ],
 }
 
-# 各场景开场白的中文。与 scenarios.py 的 opening_line 逐字对应，
-# 改了英文开场白必须同步这里，否则翻译按钮会空着。
 OPENING_ZH: dict[str, str] = {
     "Hi there! What can I get for you today?": "你好！今天想喝点什么？",
     "Good morning! Where are you flying to today?": "早上好！您今天要飞去哪里？",
@@ -700,8 +677,6 @@ OPENING_ZH: dict[str, str] = {
     "Hey, good to see you! How do you know the host?": "嗨，见到你真好！你怎么认识主人的？",
 }
 
-# 离线模式的固定中文句：开场白、收尾语、自由对话承接句、任务提问。
-# 任务提问由 TASKS 的 question_en/question_zh 自动并入 rule_engine.SENTENCE_ZH。
 FIXED_ZH: dict[str, str] = {
     "Hey! What would you like to talk about today?": "嗨！今天想聊点什么？",
     "Perfect, your order is all set. Here you go — enjoy your drink!": "好了，您的订单都齐了。请拿好——祝您喝得愉快！",

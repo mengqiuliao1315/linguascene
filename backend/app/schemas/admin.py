@@ -30,7 +30,6 @@ class CreateUserRequest(BaseModel):
 
 
 class CreatedCredentials(BaseModel):
-    """新建账号后回传给管理员，用于分发给使用者。"""
 
     id: int
     username: str
@@ -43,7 +42,6 @@ class ResetPasswordRequest(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
-    """管理员改资料、密码或账号标识。新密码只在写入时生效，不会再从列表读出。"""
 
     username: str | None = Field(default=None, min_length=2, max_length=32)
     email: EmailStr | None = None

@@ -1,7 +1,3 @@
-/**
- * 个人主页：公开数据、打卡图、加好友。
- */
-
 "use client";
 
 import Link from "next/link";

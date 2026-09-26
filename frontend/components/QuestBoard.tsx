@@ -1,11 +1,3 @@
-/**
- * 每日计划面板。
- *
- * 列表里的每一条都归用户自己：对号由用户自己打（计划做什么系统猜不到），
- * 计划名、目标、图标可以改，也能删。新用户第一次打开会拿到四条默认计划，
- * 播种逻辑在后端 social_service.ensure_default_quests。
- */
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -21,7 +13,7 @@ export function QuestBoard({ compact = false }: { compact?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  // 正在提交打勾的条目，避免连点重复请求
+
   const [pending, setPending] = useState<string[]>([]);
 
   const [label, setLabel] = useState("");
@@ -48,7 +40,7 @@ export function QuestBoard({ compact = false }: { compact?: boolean }) {
     setBusy(true);
     setError("");
     try {
-      // 计划的 XP 不再由系统代发，固定传 0。
+
       await socialApi.createQuest({ label: label.trim(), metric, target, xp: 0, icon });
       setLabel("");
       setTarget(10);
@@ -102,7 +94,6 @@ export function QuestBoard({ compact = false }: { compact?: boolean }) {
     }
   }
 
-  /** 打勾 / 取消打勾：先本地翻，让点击立刻有反馈，失败再翻回来。 */
   async function handleToggle(quest: Quest) {
     if (!quest.id || pending.includes(quest.key)) return;
     const next = !quest.completed;

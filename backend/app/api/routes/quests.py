@@ -1,5 +1,3 @@
-"""每日计划、打卡热力图、排行榜、用户公开数据。"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -19,9 +17,6 @@ from app.schemas.social import (
 from app.services import levels, social_service
 
 router = APIRouter(prefix="/api", tags=["quests"])
-
-
-# ------------------------------------------------------------------ 每日计划
 
 
 @router.get("/quests", response_model=list[QuestOut])
@@ -100,9 +95,6 @@ def delete_quest(
         raise HTTPException(status_code=404, detail="计划不存在")
     social_service.delete_quest(db, quest)
     db.commit()
-
-
-# ------------------------------------------------------------------ 统计
 
 
 @router.get("/stats/heatmap", response_model=HeatmapOut)

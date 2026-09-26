@@ -1,7 +1,3 @@
-/**
- * 阅读库：平台材料 / 我的上传 / 他人分享，以及上传入口。
- */
-
 "use client";
 
 import Link from "next/link";
@@ -76,8 +72,7 @@ function Library() {
       if (fileRef.current) fileRef.current.value = "";
       if (titleRef.current) titleRef.current.value = "";
       setText("");
-      // 直接进精读页，别把用户丢回列表再让他自己点进去。那一页会立刻开始
-      // 逐句解析并把结果一句一句补出来，省掉「再点两次 + 对着空页面等整篇」。
+
       router.push(`/reading/content/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "上传失败");

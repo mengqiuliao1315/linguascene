@@ -1,5 +1,3 @@
-"""好友与私信。"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -17,9 +15,6 @@ from app.schemas.social import (
 from app.services import social_service
 
 router = APIRouter(prefix="/api", tags=["friends"])
-
-
-# ------------------------------------------------------------------ 好友
 
 
 @router.get("/friends", response_model=list[FriendOut])
@@ -106,9 +101,6 @@ def remove_friend(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     db.commit()
-
-
-# ------------------------------------------------------------------ 私信
 
 
 @router.get("/chat/threads", response_model=list[ChatThreadOut])

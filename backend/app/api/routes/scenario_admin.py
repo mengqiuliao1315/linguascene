@@ -1,8 +1,3 @@
-"""管理员维护口语场景：新增、编辑、发布/下架、删除。
-
-普通用户只读 /api/scenarios，这里的所有写操作都要求 ADMIN。
-"""
-
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,7 +27,6 @@ def _admin_payload(scenario: Scenario) -> dict:
 
 
 def _unique_slug(db: Session, raw: str, title: str, *, exclude_id: int | None = None) -> str:
-    """生成不冲突的 slug。中文标题转不出字母时退回随机后缀。"""
     base = scenario_service.slugify(raw or title)
     if not base:
         base = "scenario"
@@ -49,7 +43,6 @@ def _unique_slug(db: Session, raw: str, title: str, *, exclude_id: int | None = 
 
 
 def _sync_tasks(db: Session, scenario: Scenario, tasks) -> None:
-    """按提交顺序整体替换任务列表，比逐条 diff 简单且不易留脏数据。"""
     scenario.tasks.clear()
     db.flush()
     for order, task in enumerate(tasks, start=1):

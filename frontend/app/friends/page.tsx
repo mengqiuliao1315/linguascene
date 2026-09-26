@@ -1,7 +1,3 @@
-/**
- * 好友与私信。左侧好友列表，右侧对话。
- */
-
 "use client";
 
 import Link from "next/link";

@@ -35,14 +35,12 @@ class ScenarioOut(BaseModel):
 
 
 class ScenarioTaskInput(BaseModel):
-    """管理员建场景时提交的一个任务点。"""
 
     description: str = Field(min_length=1, max_length=500)
     required: bool = True
 
 
 class ScenarioCreate(BaseModel):
-    """管理员新增口语场景。slug 留空则按标题自动生成。"""
 
     slug: str = Field(default="", max_length=64)
     title: str = Field(min_length=1, max_length=128)
@@ -64,7 +62,6 @@ class ScenarioCreate(BaseModel):
 
 
 class ScenarioUpdate(BaseModel):
-    """管理员编辑场景，只提交要改的字段。"""
 
     slug: str | None = Field(default=None, max_length=64)
     title: str | None = Field(default=None, min_length=1, max_length=128)
@@ -86,7 +83,6 @@ class ScenarioUpdate(BaseModel):
 
 
 class ScenarioAdminOut(ScenarioOut):
-    """管理员视图：额外暴露提示词与发布状态。"""
 
     ai_role_prompt: str = ""
     is_published: bool = True

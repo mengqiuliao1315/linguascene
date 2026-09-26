@@ -1,31 +1,6 @@
-"""平台六篇阅读材料的内置逐句讲解。
-
-这些文章是站内固定内容，不依赖模型也应能直接精读，所以讲解随文章
-一起写死在仓库里：重点单词、固定搭配、语法与整句翻译。seed 时按标题
-写入 ArticleAnalysis.sentences_json，用户打开即命中缓存，模型不可用
-也不影响体验。
-
-结构与 reading_service.analyze_document 的产出保持一致，每句：
-- translation 整句中文
-- words       (word, lemma, part_of_speech, meaning)
-- phrases     (phrase, meaning)
-- grammar     (point, explanation, example)
-
-句子顺序必须与 reading_service.split_sentences 切出的结果一一对应，
-tests/test_reading_content.py 会逐句校验。
-"""
-
-
 def build_sentences(
     title: str, splits: list[tuple[int, str]]
 ) -> list[dict] | None:
-    """把内置讲解拼成 sentences_json 的结构；这篇没有内置数据时返回 None。
-
-    splits 是 reading_service.split_sentences 的结果：正文以实际切句为准，
-    这里只负责挂上讲解，顺序与 READING_CONTENT 里的条目一一对应。
-    条数与句子数对不上说明文章被改过，返回 None 让调用方回退到模型，
-    免得把讲解错位地贴到别的句子上。
-    """
     rows = READING_CONTENT.get(title)
     if not rows or len(rows) != len(splits):
         return None

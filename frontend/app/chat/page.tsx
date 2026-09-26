@@ -9,15 +9,10 @@ import { api } from "@/lib/api";
 import { RequireAuth } from "@/lib/auth";
 import type { ConversationSummary } from "@/lib/types";
 
-/**
- * 后端存的是 UTC，但序列化出来不带时区标记，`new Date()` 会把它当本地时间，
- * 显示出来就凭空早了 8 小时。缺时区就补一个 Z 再解析。
- */
 function parseServerTime(value: string): Date {
   return new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`);
 }
 
-/** 「最后对话」时间：越近的省略得越多，一眼能认出是哪一次。 */
 function formatLastSeen(value: string): string {
   const at = parseServerTime(value);
   if (Number.isNaN(at.getTime())) return "";
@@ -45,9 +40,9 @@ function FreeTalkHome() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
-  /** 上一次的自由对话；有它就先问「继续 / 重新开始」，不默默再开一个。 */
+
   const [choiceOpen, setChoiceOpen] = useState(false);
-  /** 等待确认删除的那条记录。 */
+
   const [pendingDelete, setPendingDelete] =
     useState<ConversationSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -60,7 +55,6 @@ function FreeTalkHome() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 历史里自由对话也只有一条（后端按场景去重），所以直接找那一条就是上一次。
   const existingFreeTalk =
     history.find((item) => item.mode === "free_talk") ?? null;
 
@@ -153,7 +147,6 @@ function FreeTalkHome() {
                     <p className="text-sm font-medium text-slate-900">
                       {item.scenario_title}
                     </p>
-                    {/* 自由对话的标题都是 Free Talk，带一句内容才想得起聊的是什么 */}
                     {item.mode === "free_talk" && item.preview ? (
                       <p className="truncate text-xs text-slate-500">
                         {item.preview}

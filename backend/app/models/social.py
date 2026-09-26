@@ -18,12 +18,6 @@ def utcnow() -> datetime:
 
 
 class CustomQuest(Base):
-    """用户的每日计划。
-
-    列表里的每一条都归用户自己：可以改名、改目标、删除。新用户第一次
-    打开面板时，用 levels.DAILY_QUESTS 里的四条默认计划播一次种
-    （见 social_service.ensure_default_quests），之后系统不再插手。
-    """
 
     __tablename__ = "custom_quests"
 
@@ -32,8 +26,6 @@ class CustomQuest(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     label: Mapped[str] = mapped_column(String(64))
-    # 统计口径，取值见 levels.QUEST_METRICS；只用来显示「今天做到多少」，
-    # 是否完成由用户自己打勾决定。
     metric: Mapped[str] = mapped_column(String(32), default="words")
     target: Mapped[int] = mapped_column(Integer, default=10)
     xp: Mapped[int] = mapped_column(Integer, default=10)
@@ -44,15 +36,6 @@ class CustomQuest(Base):
 
 
 class QuestCheck(Base):
-    """用户手动给某条计划打的勾，按天存。
-
-    计划做什么只有用户自己清楚（可能压根不是站内行为），所以完成与否
-    不猜，让用户点。一行 = 某条计划在某一天被打了勾，取消打勾就删掉这行，
-    当天热力图与连续打卡天数据此计算（见 social_service.activity_by_day）。
-
-    计划被删掉时这一行会保留（quest_id 置空）：那天确实做过这件事，
-    不该因为之后删了计划就从热力图上消失。
-    """
 
     __tablename__ = "quest_checks"
     __table_args__ = (
@@ -66,13 +49,11 @@ class QuestCheck(Base):
     quest_id: Mapped[int | None] = mapped_column(
         ForeignKey("custom_quests.id", ondelete="SET NULL"), index=True, nullable=True
     )
-    # "YYYY-MM-DD"，与 User.last_active_date 同一口径
     day: Mapped[str] = mapped_column(String(10), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class Friendship(Base):
-    """好友关系。一行代表一对用户，status 区分待确认与已通过。"""
 
     __tablename__ = "friendships"
     __table_args__ = (
@@ -86,7 +67,7 @@ class Friendship(Base):
     addressee_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | accepted
+    status: Mapped[str] = mapped_column(String(16), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -94,7 +75,6 @@ class Friendship(Base):
 
 
 class ChatMessage(Base):
-    """一对一私信。"""
 
     __tablename__ = "chat_messages"
 
@@ -113,7 +93,6 @@ class ChatMessage(Base):
 
 
 class ForumPost(Base):
-    """经验帖。正文支持有限的 Markdown 子集（标题/加粗/链接/图片/列表/代码）。"""
 
     __tablename__ = "forum_posts"
 

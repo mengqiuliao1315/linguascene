@@ -17,6 +17,7 @@ class XpRecord(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     amount: Mapped[int] = mapped_column(Integer, default=0)
     source: Mapped[str] = mapped_column(String(32), default="scenario")
+    ref: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     user = relationship("User", back_populates="xp_records")
@@ -43,7 +44,6 @@ class UserAchievement(Base):
         ForeignKey("achievements.id", ondelete="CASCADE")
     )
     unlocked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    # 前端弹过解锁提示后回填；NULL 表示这条解锁还没被用户看到
     notified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

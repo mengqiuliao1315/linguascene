@@ -1,5 +1,3 @@
-"""上传接口在读取阶段就拒绝超限文件，不把整份内容先读进内存。"""
-
 from app.core.storage import MAX_AVATAR_BYTES, MAX_FORUM_IMAGE_BYTES, MAX_UPLOAD_BYTES
 
 

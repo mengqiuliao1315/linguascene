@@ -1,7 +1,4 @@
-"""等级、XP 与成就的规则定义。所有数值集中在此，便于调整。"""
-
 LEVELS: list[tuple[int, str, int]] = [
-    # (等级, 名称, 该等级起始 XP)
     (1, "Beginner", 0),
     (2, "Explorer", 100),
     (3, "Speaker", 250),
@@ -24,9 +21,6 @@ XP_REWARDS = {
 
 DAILY_GOAL_MINUTES = 10
 
-# 经验统一由「今日任务」的三个子项发放，这里只做进度展示，不再挂 XP。
-# metric / icon 用于给新用户播种默认计划（见 social_service.ensure_default_quests），
-# metric 的取值必须与 social_service.daily_stats 的返回键一致。
 DAILY_QUESTS: list[dict] = [
     {
         "key": "complete_scenario",
@@ -62,8 +56,6 @@ DAILY_QUESTS: list[dict] = [
     },
 ]
 
-# 自建计划可选的口径。key 必须与 social_service.daily_stats 的返回键一致，
-# 否则进度永远为 0。
 QUEST_METRICS: list[dict] = [
     {"key": "words", "label": "学习单词", "unit": "个"},
     {"key": "articles", "label": "阅读文章", "unit": "篇"},
@@ -85,7 +77,6 @@ ACHIEVEMENTS: list[dict] = [
     {"code": "articles_10", "name": "阅读习惯", "description": "分析 10 篇文章", "icon": "📰", "condition_type": "articles", "condition_value": 10},
 ]
 
-# 皮肤全部免费，任何用户都能直接切换，不再有解锁或金币门槛。
 THEMES: list[dict] = [
     {"code": "ocean", "name": "Ocean", "colors": ["#2563eb", "#dbeafe"]},
     {"code": "sky", "name": "Sky", "colors": ["#0ea5e9", "#e0f2fe"]},
@@ -107,7 +98,6 @@ def level_for_xp(xp: int) -> tuple[int, str]:
 
 
 def level_bounds(xp: int) -> tuple[int, int, int]:
-    """返回 (当前等级起始 XP, 下一等级起始 XP, 当前等级)。"""
     level, _ = level_for_xp(xp)
     start = next(t for lv, _, t in LEVELS if lv == level)
     nxt = next((t for lv, _, t in LEVELS if lv == level + 1), None)

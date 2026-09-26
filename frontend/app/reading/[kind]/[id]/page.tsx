@@ -1,7 +1,3 @@
-/**
- * 精读工作台：逐句讲解 + 彩色标记 + 批注 + 遮罩复习 + 导出。
- */
-
 "use client";
 
 import { useParams } from "next/navigation";
@@ -39,10 +35,8 @@ import {
   useSpeechSettings,
 } from "@/lib/speech";
 
-/** 流式分析中还没轮到讲解的句子：先占位把原文排出来，再逐句补上内容。 */
 type LiveSentence = ReadingSentence & { pending?: boolean };
 
-/** 骨架 → 占位句。原文立刻可见，讲解字段等流式事件到了再补。 */
 function placeholderSentence(skeleton: SentenceSkeleton): LiveSentence {
   return {
     index: skeleton.index,
@@ -59,7 +53,6 @@ function placeholderSentence(skeleton: SentenceSkeleton): LiveSentence {
   };
 }
 
-/** 建议标注用虚线下划线，和已采纳的实底色区分开。 */
 const COLOR_SUGGESTION_BORDER: Record<NoteColor, string> = {
   blue: "border-blue-400",
   green: "border-green-400",
@@ -71,15 +64,10 @@ const COLOR_SUGGESTION_BORDER: Record<NoteColor, string> = {
 type Piece = {
   text: string;
   note?: ReadingNote;
-  /** AI 建议但用户还没采纳。已有笔记的片段不再显示建议。 */
+
   suggestion?: SuggestedSpan;
 };
 
-/** 把一句原文切成带批注的片段。
- *
- * 有字符区间的笔记按区间切，嵌套时取最内层（start 最大）的那条上色；
- * 没有区间的老笔记退回按文本匹配，避免历史数据整片失效。
- */
 function buildPieces(
   text: string,
   notes: ReadingNote[],
@@ -113,12 +101,12 @@ function buildPieces(
     const start = sorted[i];
     const end = sorted[i + 1];
     if (end <= start) continue;
-    // 覆盖这一段的可能有多条（短语套生词），最内层的赢
+
     const covering = ranged
       .filter((item) => item.start <= start && item.end >= end)
       .sort((a, b) => b.start - a.start || b.note.id - a.note.id);
     const note = covering[0]?.note;
-    // 已经有笔记的片段不再叠建议：用户自己的标注优先
+
     const suggestion = note
       ? undefined
       : suggested
@@ -127,8 +115,6 @@ function buildPieces(
     pieces.push({ text: text.slice(start, end), note, suggestion });
   }
 
-  // 老笔记没有区间（0/0）。只拿词和短语去匹配，
-  // 因为 kind="note" 的 text 是笔记正文、不在原文里。
   const legacy = notes
     .filter(
       (note) =>
@@ -174,7 +160,6 @@ function buildPieces(
   return pieces;
 }
 
-/** 算出选区在这句话里的字符区间，跨句或不在本句内时返回 null。 */
 function selectionOffsets(
   root: HTMLElement
 ): { text: string; start: number; end: number; x: number; y: number } | null {
@@ -185,7 +170,6 @@ function selectionOffsets(
   const range = selection.getRangeAt(0);
   if (!root.contains(range.commonAncestorContainer)) return null;
 
-  // 把光标起点之前的内容也算成文本，长度就是区间起点
   const pre = range.cloneRange();
   pre.selectNodeContents(root);
   pre.setEnd(range.startContainer, range.startOffset);
@@ -299,13 +283,6 @@ function HighlightedSentence({
   );
 }
 
-/**
- * 重点单词 / 固定搭配后面那个小圆按钮：没加过是「+」，加过变「✓」。
- *
- * 变成 ✓ 之后它就只是「已加入」的状态标记了，再点直接忽略——不加、不提示、
- * 样式也不动（要撤销去右侧「本页批注」里删）。少了 `active` 这道判断，
- * 用户每点一次 ✓ 都会再落一条重复批注。
- */
 function AddButton({
   active,
   onClick,
@@ -344,14 +321,14 @@ function Workspace() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const [popover, setPopover] = useState<{
-    /** 查词用的小写形式 */
+
     word: string;
-    /** 用户选中的原文，批注锚点用它，保留大小写 */
+
     raw: string;
     x: number;
     y: number;
     context: string;
-    /** 记住选区的归属，从卡片里加批注才能挂到正确的句子和区间上 */
+
     sentenceIndex: number;
     start: number;
     end: number;
@@ -363,13 +340,13 @@ function Workspace() {
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [filter, setFilter] = useState<NoteColor | "all">("all");
   const [hoveredNoteId, setHoveredNoteId] = useState<number | null>(null);
-  /** 正在编辑释义的那条批注。模型给的翻译不一定准，得让用户自己改。 */
+
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editMeaning, setEditMeaning] = useState("");
   const [editBody, setEditBody] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
-  /** 逐句建议的进度：已挑完句数 / 总句数。跑完清空。 */
+
   const [suggestProgress, setSuggestProgress] = useState<{
     done: number;
     total: number;
@@ -377,27 +354,20 @@ function Workspace() {
   const [suggestions, setSuggestions] = useState<Record<number, SuggestedSpan[]>>(
     {}
   );
-  /** 正在合成/播放的句子 index，冷合成要好几秒，按钮上得有反馈。 */
+
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
-  /** 当前这条逐句分析流。换篇/离开页面时要掐断，别让没人看的流继续烧模型。 */
+
   const streamRef = useRef<AbortController | null>(null);
-  /** 空材料自动开跑只做一次，重新渲染不该再触发一轮模型调用。 */
+
   const autoStartedRef = useRef(false);
   const {
     muted,
     supported: ttsSupported,
-    // 静音偏好是从 localStorage 里读出来的，读完之前别急着预取
+
     ready: speechReady,
     setMuted,
   } = useSpeechSettings();
 
-  // 离开页面时别让朗读声继续飘着，也别替一篇已经关掉的文章继续合成。
-  //
-  // 逐句分析流故意不在这里 abort：StrictMode 挂载后会立刻跑一次「假卸载」，
-  // 同步 abort 会把刚发起的那条流掐死在第一帧，而自动开跑的一次性守卫已经
-  // 用掉，重挂载不会再发一次——dev 下就变成永远空页面。而且后端跑完会把结果
-  // 落库，这次分析不是白跑的：下次打开直接命中缓存。换篇/重新分析时另有一处
-  // abort 收掉上一条流，那里才是真正需要互斥的地方。
   useEffect(
     () => () => {
       stopSpeaking();
@@ -423,27 +393,14 @@ function Workspace() {
     void load();
   }, [load]);
 
-  /**
-   * 打开一篇还没有逐句讲解的材料就直接开跑。
-   *
-   * 用户点进来就是要读的，不该再点一次「生成逐句讲解」、再对着空页面等整篇。
-   * 骨架一到原文就出来了，讲解逐句补上；自动开跑只做一次，重渲染不再触发。
-   */
   useEffect(() => {
     if (loading || autoStartedRef.current) return;
     if (!material || material.sentences.length > 0) return;
     autoStartedRef.current = true;
     void handleAnalyze(false);
-    // handleAnalyze 每帧都是新的引用，放进依赖会变成无限循环
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [loading, material]);
 
-  /**
-   * 按句索引合并流式到达的结果。
-   *
-   * 逐句分析是并发跑的，事件顺序不保证，只能按 index 归位；同时要保住已有
-   * 批注——「重新分析」会把讲解整条换掉，但用户的笔记不该跟着消失。
-   */
   const mergeSentences = useCallback((incoming: LiveSentence[]) => {
     setSentences((prev) => {
       const byIndex = new Map(prev.map((item) => [item.index, item]));
@@ -458,25 +415,11 @@ function Workspace() {
     });
   }, []);
 
-  /**
-   * 文章一到位就把整篇语音排进预取队列。
-   *
-   * 后端维持着一小组常驻合成连接（见 backend/app/services/audio_service.py），
-   * 连接热着时一句只要 0.3~0.5s，命中缓存更是毫秒级。预取队列自带限流，
-   * 悬停/点击/「听下一句」都带 urgent 会插队，所以把整篇排进去只是填满空闲
-   * 容量，不会挡住用户当前想听的那句。等读到文章后半段时音频基本都已就位，
-   * 点喇叭就是瞬间出声。
-   *
-   * 静音时不预取，省流量；用户打开声音后本 effect 会重跑，把没取过的补上。
-   * sentences 在流式分析期间会逐句增长，这里每次全量重排也没关系——
-   * prefetchSpeech 内部按 URL 去重，已取过/正在取的不会重复排队。
-   */
   useEffect(() => {
     if (!speechReady || muted) return;
     for (const sentence of sentences) prefetchSpeech(sentence.text);
   }, [sentences, muted, speechReady]);
 
-  // 划词工具条一出来就把这个词的发音取回来：点查词再点喇叭时不必现场合成
   useEffect(() => {
     if (!speechReady || muted || !selection) return;
     const text = selection.text.trim();
@@ -545,11 +488,6 @@ function Workspace() {
     const clean = text.trim();
     if (!clean) return;
 
-    // 同一句里同一个词/搭配只留一条。芯片上的「+」加完会变成 ✓ 挡住后续点击，
-    // 但双击时两次点击都发生在重渲染之前，光靠按钮状态挡不住，所以这里再兜一层。
-    //
-    // 带区间的批注（划词、查词卡片、AI 建议）不拦：同一个词在一句里出现两次时，
-    // 字符区间是区分它们唯一的依据，按文本去重会把第二次误判成重复。
     const hasSpan = (options.start ?? 0) > 0 || (options.end ?? 0) > 0;
     if (!hasSpan && noteKind !== "note" && alreadyNoted(sentenceIndex, clean)) {
       return;
@@ -572,7 +510,6 @@ function Workspace() {
     }
   }
 
-  /** 划词点颜色：直接按颜色落库，不再轮转分配。 */
   async function handlePickColor(color: NoteColor) {
     if (!selection) return;
     const single = selection.text.split(/\s+/).length === 1;
@@ -588,7 +525,6 @@ function Workspace() {
     await addNote(selection.sentenceIndex, noteKind, selection.text, payload);
   }
 
-  /** 划词写笔记：正文进 note，选中的原文进 text，按区间染色。 */
   async function handleAnnotate(body: string, color: NoteColor) {
     if (!selection) return;
     const payload = {
@@ -620,9 +556,6 @@ function Workspace() {
     window.getSelection()?.removeAllRanges();
   }
 
-  /** 从查词卡片直接加批注：落库的是选中的词 + 卡片上的释义。
-   *  已有批注但当时没带上翻译（点得太早 / 查词失败）时，改成把翻译补到那条上，
-   *  不另落一条重复的；释义齐全的批注不用再动。 */
   async function handleAnnotateFromPopover(payload: {
     text: string;
     meaning: string;
@@ -660,7 +593,6 @@ function Workspace() {
     }
   }
 
-  /** 进入编辑态：把当前释义和备注灌进表单，取消时能原样退回。 */
   function startEditNote(note: ReadingNote) {
     setEditingNoteId(note.id);
     setEditMeaning(note.meaning);
@@ -673,7 +605,6 @@ function Workspace() {
     setEditBody("");
   }
 
-  /** 保存修正后的释义 / 备注。只 PATCH 这两栏，颜色和字符区间保持不动。 */
   async function saveEditNote(note: ReadingNote) {
     if (savingNote) return;
     setSavingNote(true);
@@ -691,17 +622,12 @@ function Workspace() {
     }
   }
 
-  /**
-   * 请模型给整篇提标注建议。建议不落库，采纳时才写成批注。
-   *
-   * 走流式接口：跑完一句发一句，长文不必等到最后一句才看到东西。
-   */
   async function handleSuggest() {
     if (suggesting) return;
     setSuggesting(true);
     setError("");
     setSuggestProgress(null);
-    // 整篇换掉：留着上一轮的，本次没挑出建议的句子会停在过期状态
+
     setSuggestions({});
 
     let received = 0;
@@ -723,7 +649,7 @@ function Workspace() {
       });
     } catch (err) {
       if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
-        // 后端还是老版本、没有流式端点时退回一次性接口：慢，但功能不能整个坏掉
+
         await suggestInOneShot();
       } else {
         setError(err instanceof Error ? err.message : "生成建议失败");
@@ -734,7 +660,6 @@ function Workspace() {
     }
   }
 
-  /** 老后端没有流式端点时的退路：等整篇挑完再一次性画上。 */
   async function suggestInOneShot() {
     try {
       const result = await readingApi.suggest(kind, materialId);
@@ -753,7 +678,6 @@ function Workspace() {
     }
   }
 
-  /** 建议跑完后的提示：一条都没挑出来、或有句子退化成词表时得说清楚。 */
   function reportSuggestOutcome(
     hits: number,
     fallbackCount: number,
@@ -762,7 +686,7 @@ function Workspace() {
     if (!hits) {
       setError("这篇没有找到值得标注的地方，试试自己划词标注。");
     } else if (fallbackCount > 0) {
-      // 只有部分句子退化时别说"模型没调通"——多数建议可能仍是模型挑的
+
       setError(
         fallbackCount >= sentenceCount
           ? "模型暂时没调通，下面是按分级词表挑的超纲词，仅供参考。"
@@ -771,7 +695,6 @@ function Workspace() {
     }
   }
 
-  /** 采纳一条建议：写成真正的批注，然后从建议里移除。 */
   async function acceptSuggestion(span: SuggestedSpan, sentenceIndex: number) {
     const single = span.text.split(/\s+/).length === 1;
     setSuggestions((prev) => ({
@@ -780,7 +703,7 @@ function Workspace() {
         (item) => item.start_offset !== span.start_offset
       ),
     }));
-    // 只落词和它的释义：模型给的 reason 不写进备注，备注留给用户自己写。
+
     await addNote(sentenceIndex, single ? "word" : "phrase", span.text, {
       meaning: meaningFor(sentenceIndex, span.text),
       color: span.color,
@@ -813,31 +736,24 @@ function Workspace() {
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  /** 朗读一句原文。后端合成冷启动要等几秒，等它真正出声才收起转圈。 */
   async function speakSentence(index: number, text: string) {
     if (muted) return;
     setSpeakingIndex(index);
-    // 一边播这句一边把下一句备好：连续往下听时不必每句都等合成
+
     const next = sentences.find((item) => item.index === index + 1);
     if (next) prefetchSpeech(next.text, { urgent: true });
     try {
       await speak(text);
     } finally {
-      // 期间点了另一句时，别把新的状态清掉
+
       setSpeakingIndex((current) => (current === index ? null : current));
     }
   }
 
-  /**
-   * 逐句讲解。走流式接口：骨架一到就把原文排出来，之后跑完一句补一句。
-   *
-   * force 由调用方决定——「重新分析」要覆盖已有结果，首次生成不需要。
-   */
-  async function handleAnalyze(force?: boolean) {
+  async function handleAnalyze(force = false) {
     if (analyzing) return;
-    const useForce = force ?? sentences.length > 0;
+    const useForce = force;
 
-    // 上一轮还没跑完就再点一次时先掐断旧的，否则两条流会同时往 state 里写
     streamRef.current?.abort();
     const controller = new AbortController();
     streamRef.current = controller;
@@ -850,15 +766,14 @@ function Workspace() {
         force: useForce,
         signal: controller.signal,
         onStart: (skeleton) => {
-          // 骨架先落位：原文立刻可读，讲解字段还是空的
+
           mergeSentences(skeleton.map(placeholderSentence));
         },
         onSentence: (sentence) => {
           mergeSentences([{ ...sentence, pending: false }]);
         },
         onDone: (generated) => {
-          // generated=false 表示模型这次没调通、结果是离线兜底。
-          // 不提示的话用户只会看到空翻译，以为功能坏了。
+
           if (!generated) {
             setError(
               "模型暂时没调通，下面是离线分析结果；稍后点「重新分析」再试一次。"
@@ -869,13 +784,13 @@ function Workspace() {
     } catch (err) {
       if (controller.signal.aborted) return;
       if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
-        // 后端还是老版本、没有流式端点时退回一次性接口：慢，但功能不能整个坏掉
+
         await analyzeInOneShot(useForce);
       } else {
         setError(err instanceof Error ? err.message : "生成失败");
       }
     } finally {
-      // 只有还是当前这条流才收尾：被新的一轮顶掉时不能把它的状态清掉
+
       if (streamRef.current === controller) {
         streamRef.current = null;
         setAnalyzing(false);
@@ -883,7 +798,6 @@ function Workspace() {
     }
   }
 
-  /** 老后端没有流式端点时的退路：等整篇跑完再一次性渲染。 */
   async function analyzeInOneShot(force: boolean) {
     try {
       const result = await readingApi.analyze(kind, materialId, force);
@@ -956,7 +870,6 @@ function Workspace() {
 
   return (
     <div className="space-y-4">
-      {/* 顶部工具条 */}
       <div className="card flex flex-wrap items-center gap-3 p-4">
         <div className="min-w-[12rem] flex-1">
           <h1 className="text-base font-semibold text-slate-900">{material.title}</h1>
@@ -1002,7 +915,7 @@ function Workspace() {
                 : "AI 建议标注"}
             </button>
             <button
-              onClick={() => void handleAnalyze()}
+              onClick={() => void handleAnalyze(true)}
               disabled={analyzing}
               className="btn-ghost !py-2 text-sm"
             >
@@ -1015,7 +928,6 @@ function Workspace() {
             >
               {exporting ? "导出中…" : "导出 PDF"}
             </button>
-            {/* 每句后面的小喇叭受这里控制，没有开关就会变成"点了没反应" */}
             {ttsSupported ? (
               <button
                 onClick={() => setMuted(!muted)}
@@ -1050,21 +962,18 @@ function Workspace() {
         />
       ) : (
         <div className="grid gap-5 lg:grid-cols-3">
-          {/* 左：逐句讲解 */}
           <div className="space-y-4 lg:col-span-2">
             {sentences.map((sentence) => (
               <section
                 key={sentence.index}
                 id={`sentence-${sentence.index}`}
                 data-sentence-index={sentence.index}
-                // 鼠标移上去说明多半要听：插到背景预取前面，点下去就能出声
+
                 onMouseEnter={() => {
                   if (!muted) prefetchSpeech(sentence.text, { urgent: true });
                 }}
                 className="card space-y-3 p-5"
               >
-                {/* 喇叭放在 <p> 外面：塞进正文里会算进选区的字符长度，
-                    划词批注的 start/end 就会整体偏移 */}
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
                     <HighlightedSentence
@@ -1117,8 +1026,6 @@ function Workspace() {
                   ) : null}
                 </div>
 
-                {/* 这句还在排队等模型。原文已经能读了，先给个占位，
-                    免得用户以为这就是全部内容、后面的永远不会来。 */}
                 {sentence.pending ? (
                   <p className="flex items-center gap-2 text-xs text-slate-400">
                     <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-brand-500" />
@@ -1236,8 +1143,6 @@ function Workspace() {
                   </div>
                 ) : null}
 
-                {/* 这句的自定义笔记。讲解还没出来时先不给写入口——
-                    这一句马上会被流式结果整条替换，写下去的状态会跟着丢。 */}
                 {sentence.pending ? null : (
                   <div className="flex items-center gap-2 pt-1">
                     <input
@@ -1268,7 +1173,6 @@ function Workspace() {
             ))}
           </div>
 
-          {/* 右：批注栏 */}
           <aside className="space-y-3 lg:sticky lg:top-20 lg:self-start">
             <div className="card space-y-3 p-5">
               <div className="flex items-center justify-between">
@@ -1325,8 +1229,7 @@ function Workspace() {
                       }`}
                     >
                       {editingNoteId === note.id ? (
-                        /* 编辑态：模型给的释义常有个别不准，就地改掉。
-                           这里不能沿用外面那个 <button>——按钮里塞 textarea 是非法结构。 */
+
                         <div className="space-y-1.5">
                           <div className="flex items-start gap-2">
                             <span

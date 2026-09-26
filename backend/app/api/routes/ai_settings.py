@@ -1,10 +1,3 @@
-"""用户自己的 AI 接入设置。
-
-每个用户都可以添加多个供应商（Base URL、Key、API 格式），每个供应商下
-可以存多个模型名并指定当前用哪个。全站没有"平台免费模型"，管理员要提供
-模型就用自己账号在这里配置后「分享」给别人。
-"""
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -68,7 +61,6 @@ def create_config(
         models=payload.models,
         active_model=payload.active_model,
     )
-    # 新加的供应商自动成为当前使用的那条
     ai_config_service.set_active_config(db, user, config)
     return _reload(db, user)
 
@@ -114,7 +106,6 @@ def delete_config(
         raise HTTPException(status_code=404, detail="供应商不存在")
 
     ai_config_service.delete_config(db, config)
-    # 删掉的正好是当前使用的那条：清空选择，回落到自动选择
     if user.ai_active_config_id == config_id:
         user.ai_active_config_id = None
     return _reload(db, user)
@@ -145,7 +136,6 @@ def set_active(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     else:
-        # 都不传：回到自动回落
         user.ai_active_config_id = None
         user.ai_active_share_id = None
 
@@ -157,7 +147,6 @@ def _resolve_key(
     user: User,
     payload: AiModelListIn,
 ) -> str:
-    """测试/拉模型时没填 Key 就沿用已保存的那把，方便只改模型名后验证。"""
     if payload.api_key:
         return payload.api_key
     if payload.config_id is not None:
@@ -185,8 +174,6 @@ def test_credential(
             api_format=payload.api_format,
         )
     except AIProviderError as exc:
-        # 地址本身填错（缺域名、有空格、方括号没配对）：说清楚哪儿不对，
-        # 而不是抛一个 500 让用户看到「服务器内部错误」。
         return AiConnectionResult(success=False, message=str(exc), status="fail")
 
     outcome = probe_provider_detail(provider)
@@ -196,7 +183,6 @@ def test_credential(
         status=outcome.status,
         suggested_models=outcome.suggested_models,
     )
-
 
 
 @router.post("/models", response_model=AiModelListOut)

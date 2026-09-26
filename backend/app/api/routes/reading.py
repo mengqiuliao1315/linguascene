@@ -1,10 +1,3 @@
-"""精读路由。
-
-统一处理两类材料：
-- article：平台自带阅读材料
-- content：用户上传（自己或他人公布）
-"""
-
 import json
 import logging
 from collections.abc import Iterator
@@ -98,9 +91,6 @@ def _material_base(
     }
 
 
-# ------------------------------------------------------------------ 材料库
-
-
 @router.get("/materials", response_model=list[MaterialOut])
 def list_materials(
     source: str = "all",
@@ -136,9 +126,7 @@ async def upload_material(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    # 上传者名字随材料一起保存，公布后其他人能看到作者
     content.author_name = user.username
-    # 上传即发布，记一次贡献值（与 /api/content/upload 同口径）
     wordbook_service.award_publish_once(
         db,
         user,
@@ -146,6 +134,7 @@ async def upload_material(
         amount=wordbook_service.CONTRIBUTION_RULES["publish_content"],
         reason="publish_content",
     )
+    wordbook_service.record_reading(db, user, kind="content", material_id=content.id)
     db.commit()
 
     document = reading_service.load_document(db, user, content_id=content.id)
@@ -169,9 +158,6 @@ def delete_material(
     db.commit()
 
 
-# ------------------------------------------------------------------ 单篇
-
-
 @router.get("/materials/{kind}/{material_id}", response_model=MaterialDetailOut)
 def get_material(
     kind: str,
@@ -181,12 +167,8 @@ def get_material(
 ) -> MaterialDetailOut:
     document = _resolve_document(db, user, kind, material_id)
 
-    # 缓存与当前切句结果对不上（旧切句逻辑留下的）时返回空，前端会重新生成，
-    # 而不是把错的粒度（整段算一句）一直显示下去
     sentences: list[dict] = reading_service.stored_sentences(document)
 
-    # 平台文章的内置讲解：老库或没跑过 seed 时缓存可能是空的，这里补上并
-    # 落库，保证不配模型也能直接精读，不必先点「生成逐句讲解」。
     if not sentences:
         builtin = reading_service.builtin_sentences(document)
         if builtin:
@@ -202,8 +184,7 @@ def get_material(
         for note in sentence["notes"]:
             note["in_vocabulary"] = note["text"].lower() in known
 
-    # 打开材料就算读过：每天第一次计入「读文章」并记打卡
-    wordbook_service.record_reading(db, user)
+    wordbook_service.record_reading(db, user, kind=kind, material_id=material_id)
     db.commit()
 
     return MaterialDetailOut(
@@ -237,12 +218,6 @@ def _analysis_events(
     force: bool,
     provider,
 ) -> Iterator[str]:
-    """把逐句讲解转成 SSE 帧。
-
-    流式生成器由 Starlette 丢进线程池跑，和请求本身不在同一个线程上，所以
-    这里自己开一条 Session，不跟请求那条混用（SQLAlchemy 的 Session 不保证
-    跨线程安全）。用户对象同理，按 id 在新会话里重新取。
-    """
     db = SessionLocal()
     try:
         user = db.get(User, user_id)
@@ -284,8 +259,6 @@ def analyze_stream(
     用 GET 是为了让浏览器原生 EventSource 也能接；前端实际走 fetch 流式读取，
     因为 EventSource 没法带 Authorization 头。
     """
-    # 先用请求这条会话做一次权限校验，404/403 才能照常走 HTTP 状态码——
-    # 一旦开始吐 SSE 帧，响应头就已经发出去了，那时再报错前端只能看到断流。
     _resolve_document(db, user, kind, material_id)
 
     return StreamingResponse(
@@ -293,7 +266,6 @@ def analyze_stream(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
-            # 关掉 nginx 一类反向代理的缓冲，否则帧会被攒起来一次性发
             "X-Accel-Buffering": "no",
         },
     )
@@ -313,7 +285,6 @@ def publish_material(
     except reading_service.DocumentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    # 上传时已记过的不重复；先前的上传没走到这里时才补上
     if is_public:
         wordbook_service.award_publish_once(
             db,
@@ -327,9 +298,6 @@ def publish_material(
     return MaterialOut.model_validate(
         reading_service._content_item(db, content, source="mine", is_mine=True)
     )
-
-
-# ------------------------------------------------------------------ 笔记
 
 
 def _note_out(note, known: set[str]) -> NoteOut:
@@ -388,12 +356,10 @@ def _collect_suggestions(
     payload: SuggestRequest,
     provider,
 ) -> SuggestOut:
-    """整篇跑齐再返回的一次性版本，逻辑与流式共用 service 里的两条辅助函数。
-
-    前端已改走 /suggest/stream；这里留着是为了非流式调用方（脚本、测试）也能用。
-    """
     document = _resolve_document(db, user, kind, material_id)
-    sentences = reading_service.analyze_document(db, user, document)["sentences"]
+    sentences = reading_service.analyze_document(
+        db, user, document, provider=provider
+    )["sentences"]
     db.commit()
 
     targets = reading_service.suggestion_targets(sentences, payload.sentence_indexes)
@@ -409,7 +375,6 @@ def _collect_suggestions(
     return SuggestOut(
         by_sentence=by_sentence,
         generated=model_hits == len(targets) and not provider.is_mock,
-        # 部分句子退化成词表时，前端提示"部分兜底"而不是笼统说模型没调通
         fallback_count=len(targets) - model_hits,
         sentence_count=len(targets),
     )
@@ -442,11 +407,6 @@ def _suggest_events(
     sentence_indexes: list[int],
     provider,
 ) -> Iterator[str]:
-    """把逐句建议转成 SSE 帧。
-
-    与逐句讲解同理：流式生成器由 Starlette 丢进线程池，和请求不在同一个线程，
-    所以自己开一条 Session，用户对象按 id 重新取。
-    """
     db = SessionLocal()
     try:
         user = db.get(User, user_id)
@@ -492,8 +452,6 @@ def suggest_stream(
     与 /analyze/stream 一样用 GET、走 fetch 流式读取：EventSource 没法带
     Authorization 头，token 只能塞进 query，会漏进访问日志。
     """
-    # 先用请求这条会话做权限校验，404/403 才能照常走 HTTP 状态码——开始吐帧
-    # 之后响应头已经发出，那时再报错前端只能看到断流。
     _resolve_document(db, user, kind, material_id)
 
     return StreamingResponse(
@@ -526,7 +484,6 @@ def analyze_selection(
 
     sentence = payload.sentence.strip()
     if not sentence and document.cached_sentences:
-        # 前端没带原句时，用缓存里对应句补上，让模型能按语境释义
         try:
             cached = json.loads(document.cached_sentences)
             for item in cached:
@@ -556,8 +513,6 @@ def update_note(
 
     if payload.note is not None:
         note.note = payload.note
-    # 用户修正模型给的释义。用 is not None 判断，空串才算「清空」，
-    # 只改颜色时前端不带这个字段，不能顺手把释义抹掉。
     if payload.meaning is not None:
         note.meaning = payload.meaning
     if payload.color:
@@ -590,7 +545,6 @@ def note_to_vocabulary(
     if not note:
         raise HTTPException(status_code=404, detail="笔记不存在")
 
-    # 单词用原型入词库，studies 与 study 不该是两条记录
     word = note.lemma or note.text
     vocabulary_service.save_word(
         db,
@@ -605,20 +559,20 @@ def note_to_vocabulary(
     return _note_out(note, reading_service.vocabulary_word_set(db, user))
 
 
-# ------------------------------------------------------------------ 导出
-
-
 @router.get("/materials/{kind}/{material_id}/export.pdf")
 def export_pdf(
     kind: str,
     material_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    provider=Depends(get_user_provider),
 ) -> Response:
     """导出带批注栏的 PDF：左侧原文，右侧本句的重点词/搭配与个人笔记。"""
     document = _resolve_document(db, user, kind, material_id)
 
-    payload = reading_service.analyze_document(db, user, document)
+    payload = reading_service.analyze_document(
+        db, user, document, provider=provider
+    )
     notes = reading_service.list_notes(db, user, document)
     sentences = reading_service.build_annotations(payload["sentences"], notes)
     db.commit()

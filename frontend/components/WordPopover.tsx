@@ -1,9 +1,3 @@
-/**
- * 划词翻译弹窗：查词、发音、加批注、加词库。
- *
- * 查完词就地就能「加入批注」——批注里落的是这个词和它的释义，
- * 这样不用先关掉卡片、再重新划一次词去点颜色。
- */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -21,16 +15,13 @@ export function WordPopover({
   onAddNote,
   onClose,
 }: {
-  /** 用于查词的小写形式 */
+
   word: string;
-  /** 用户实际选中的原文：批注锚点与展示都用它，保留大小写 */
+
   raw?: string;
   context: string;
   position: { x: number; y: number };
-  /**
-   * 这个词在所属句子里已有批注的释义，由页面按笔记列表判断。
-   * undefined = 还没有批注；空串 = 有批注但没翻译（这时按钮负责把翻译补上）。
-   */
+
   notedMeaning?: string;
   onAddNote?: (payload: { text: string; meaning: string }) => Promise<void> | void;
   onClose: () => void;
@@ -39,12 +30,12 @@ export function WordPopover({
   const [saved, setSaved] = useState(false);
   const [noting, setNoting] = useState(false);
   const [loading, setLoading] = useState(true);
-  /** 在途的查词请求：点「加入批注」比接口快时要靠它拿到释义 */
+
   const lookupRef = useRef<Promise<WordExplanation | null> | null>(null);
   const spokenFor = useRef("");
 
   const display = raw || word;
-  /** 还有事可做：没批注，或批注里缺翻译（补翻译也是这条按钮的活） */
+
   const canAnnotate = notedMeaning === undefined || !notedMeaning.trim();
 
   useEffect(() => {
@@ -65,7 +56,7 @@ export function WordPopover({
         if (!cancelled) setLoading(false);
       });
     lookupRef.current = task;
-    // 释义在路上时就把发音先取回来：点喇叭时音频多半已经在浏览器里
+
     if (spokenFor.current !== word) {
       spokenFor.current = word;
       prefetchSpeech(word, { lang: "en-US" });
@@ -75,9 +66,8 @@ export function WordPopover({
     };
   }, [word]);
 
-  /** 读音：词典形和后端给的音标是一套，优先读它，没查到再读选中原文。 */
   function handleSpeak() {
-    // 走整句朗读那条已经预取过的通道，不再单独打一次单词合成
+
     void speak(data?.word || display);
   }
 
@@ -98,9 +88,7 @@ export function WordPopover({
     if (!onAddNote || !canAnnotate) return;
     setNoting(true);
     try {
-      // 查词要调模型，几秒起步。用户点得比接口快时得等它回来再落库，
-      // 否则批注里只有词、没有翻译 —— 这条批注要的就是「词 + 翻译」。
-      // 查词失败时 meaning 为空，仍然允许记一笔，不拦着用户。
+
       const result = data ?? (await lookupRef.current) ?? null;
       const meaning =
         result?.core_meanings.join("；") || result?.meaning_in_context || "";

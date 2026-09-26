@@ -10,7 +10,7 @@ def test_save_and_list_vocabulary(auth_client):
     )
     assert response.status_code == 201
     saved = response.json()
-    assert saved["word"] == "significantly"  # 统一小写
+    assert saved["word"] == "significantly"
 
     listing = auth_client.get("/api/vocabulary").json()
     assert any(item["word"] == "significantly" for item in listing)

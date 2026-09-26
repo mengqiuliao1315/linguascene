@@ -1,5 +1,3 @@
-"""schema 补列、Alembic 升级，以及 Redis/S3 回落路径。"""
-
 import os
 import tempfile
 from pathlib import Path
@@ -46,6 +44,40 @@ def test_apply_schema_is_idempotent():
     assert "token_version" in columns
 
 
+def test_apply_schema_repairs_legacy_orphan_column_for_inserts():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE users ("
+                "id INTEGER PRIMARY KEY, "
+                "username VARCHAR(64), "
+                "email VARCHAR(255), "
+                "password_hash VARCHAR(255), "
+                "pet_feed_streak INTEGER NOT NULL"
+                ")"
+            )
+        )
+    apply_schema(engine)
+
+    columns = {col["name"] for col in inspect(engine).get_columns("users")}
+    assert "pet_feed_streak" not in columns
+
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models.user import User
+
+    with sessionmaker(bind=engine)() as session:
+        session.add(
+            User(
+                username="legacy",
+                email="legacy@example.com",
+                password_hash="x",
+            )
+        )
+        session.commit()
+
+
 def test_alembic_upgrade_creates_users_and_token_version(monkeypatch):
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
@@ -71,7 +103,7 @@ def test_alembic_upgrade_creates_users_and_token_version(monkeypatch):
                 version = conn.execute(
                     text("SELECT version_num FROM alembic_version")
                 ).scalar_one()
-            assert version == "0001_baseline"
+            assert version == "0002_drop_orphan_columns"
         finally:
             engine.dispose()
     finally:

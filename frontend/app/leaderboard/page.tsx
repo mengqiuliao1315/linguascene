@@ -1,7 +1,3 @@
-/**
- * 排行榜：前三名领奖台 + 带相对进度的完整榜单，点进去看个人主页。
- */
-
 "use client";
 
 import Link from "next/link";
@@ -39,7 +35,6 @@ function formatValue(metric: Metric, value: number): string {
   return `${value} ${UNIT[metric]}`;
 }
 
-/** 领奖台：视觉上按第 2、1、3 名排列，中间最高。 */
 function Podium({ rows, metric }: { rows: LeaderRow[]; metric: Metric }) {
   const order = [rows[1], rows[0], rows[2]].filter(Boolean) as LeaderRow[];
   const heights: Record<number, number> = { 1: 92, 2: 64, 3: 52 };
@@ -223,7 +218,7 @@ function Board() {
       for (const req of requests.outgoing) next[req.user_id] = "outgoing";
       setFriendStates(next);
     } catch {
-      // 好友状态只影响按钮文案，失败时退回「加好友」，不打断排行榜
+
     }
   }, []);
 

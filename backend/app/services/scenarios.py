@@ -1,5 +1,3 @@
-"""场景序列化与 slug 生成，供普通路由与管理员路由共用。"""
-
 import hashlib
 import json
 import re
@@ -8,7 +6,6 @@ from app.models.learning import Scenario
 
 
 def scenario_payload(scenario: Scenario) -> dict:
-    """把 ORM 对象转成前端要的形状（JSON 字段解包、任务排序）。"""
     return {
         "id": scenario.id,
         "slug": scenario.slug,
@@ -39,11 +36,6 @@ def scenario_payload(scenario: Scenario) -> dict:
 
 
 def slugify(raw: str) -> str:
-    """把标题压成 URL 友好的 slug。
-
-    保留字母数字与连字符；中文标题转不出可用字符时，退回标题哈希，
-    保证同一标题稳定生成同一个 slug（冲突再由调用方加序号）。
-    """
     text = (raw or "").strip().lower()
     ascii_part = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
     if ascii_part:

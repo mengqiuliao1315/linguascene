@@ -1,7 +1,3 @@
-/**
- * 论坛：经验帖列表 + 发帖。
- */
-
 "use client";
 
 import Link from "next/link";
@@ -45,7 +41,6 @@ function Forum() {
   const [tagsInput, setTagsInput] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // 列表卡片只拿得到摘要，展开时才按需拉全文
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [fullContent, setFullContent] = useState<Record<number, string>>({});
   const [expandingId, setExpandingId] = useState<number | null>(null);
@@ -98,7 +93,6 @@ function Forum() {
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
 
-  /** 在光标处插入 Markdown 片段，插完把光标移到末尾，方便接着写。 */
   function insertAtCursor(snippet: string) {
     const el = contentRef.current;
     if (!el) {
@@ -117,7 +111,7 @@ function Forum() {
 
   async function handlePickImage(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    event.target.value = ""; // 清空后才能再次选中同一张图
+    event.target.value = "";
     if (!file) return;
 
     setUploading(true);
@@ -136,7 +130,7 @@ function Forum() {
   function handleInsertLink() {
     const raw = linkUrl.trim();
     if (!raw) return;
-    // 直接粘 example.com 的人不少，补上协议，否则渲染时会被当成非法链接丢掉
+
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     insertAtCursor(`[${linkLabel.trim() || url}](${url})`);
     setLinkOpen(false);
@@ -203,7 +197,6 @@ function Forum() {
     }
   }
 
-  // 卡片主体可点开：标题仍跳详情，按钮各自处理，其余区域切换展开
   function handleCardClick(event: React.MouseEvent, post: ForumPost) {
     const target = event.target as HTMLElement;
     if (target.closest("a, button")) return;
@@ -221,7 +214,7 @@ function Forum() {
 
     setExpandingId(post.id);
     try {
-      // count_view=false：就地展开不算一次阅读
+
       const full = await socialApi.post(post.id, false);
       setFullContent((prev) => ({ ...prev, [post.id]: full.content ?? "" }));
     } catch (err) {
@@ -320,7 +313,6 @@ function Forum() {
               placeholder={"正文支持 Markdown：# 标题、**加粗**、- 列表。也可以点下面的按钮插入图片或链接。"}
               className="input resize-y font-mono text-sm"
             />
-            {/* 编辑工具条：图片先传到服务器换回 URL，再以 Markdown 图片语法插到光标处 */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
                 ref={fileRef}
@@ -497,7 +489,6 @@ function Forum() {
         </div>
       )}
 
-      {/* 发布入口：蓝色圆形悬浮按钮 */}
       <button
         onClick={() => setComposing((v) => !v)}
         aria-label={composing ? "取消发布" : "发布帖子"}
@@ -509,7 +500,6 @@ function Forum() {
         </span>
       </button>
 
-      {/* 链接弹窗：确认后把 [文字](网址) 插进正文，渲染成可点的新标签页链接 */}
       {linkOpen ? (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 p-4"

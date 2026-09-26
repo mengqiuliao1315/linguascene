@@ -1,13 +1,3 @@
-/**
- * 模型设置。
- *
- * 左侧是来源列表，右侧是选中项的详情：
- * - 我接入的供应商（可以添加多个，每个下面可以存多个模型，选一个当前使用）
- * - 我采纳的、别人分享的模型
- * - 我分享出去给别人用的模型（可随时停用/删除）
- *
- * 全站没有"管理员免费模型"，任何可用的模型都来自某个用户的配置或分享。
- */
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -36,7 +26,6 @@ const SOURCE_TEXT: Record<string, string> = {
   mock: "离线规则引擎",
 };
 
-/** 左侧列表里给每种来源配的图标底色。 */
 const SOURCE_ACCENT: Record<string, string> = {
   user: "bg-brand-500 text-white",
   share: "bg-violet-500 text-white",
@@ -44,7 +33,6 @@ const SOURCE_ACCENT: Record<string, string> = {
   mock: "bg-slate-400 text-white",
 };
 
-/** 来源图标里的水果标志：比首字温和，几个来源也不会看起来一模一样。 */
 const SOURCE_FRUIT: Record<string, string> = {
   user: "🍎",
   share: "🍇",
@@ -54,9 +42,8 @@ const SOURCE_FRUIT: Record<string, string> = {
 
 const SOURCE_FRUIT_FALLBACK = ["🍑", "🍒", "🍉", "🍓", "🥭"];
 
-/** 来源图标：统一的圆角方块 + 水果标志，避免列表里全是同一种圆点。 */
 function SourceIcon({ source }: { source: string }) {
-  // 按来源名取一个固定的水果，看起来是随机分配的，但重渲染时不会跳来跳去
+
   const fruit =
     SOURCE_FRUIT[source] ??
     SOURCE_FRUIT_FALLBACK[
@@ -94,13 +81,12 @@ function AiSettingsView() {
   const [fetchingModels, setFetchingModels] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  // 「地址和 Key 都没问题，只是模型这次太慢」这类结论：不是错误，但也不是绿
+
   const [warning, setWarning] = useState("");
   const [pane, setPane] = useState<PaneKey>("new");
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
-  // 当前编辑的供应商表单
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -109,24 +95,16 @@ function AiSettingsView() {
   const [activeModel, setActiveModel] = useState("");
   const [modelInput, setModelInput] = useState("");
   const [addingModel, setAddingModel] = useState(false);
-  // 「自动获取」拿到的候选，和已保存的 models 分开，避免点一下就混进列表
+
   const [fetched, setFetched] = useState<string[]>([]);
-  // 当前表单里的地址来自哪个预设：写在 Base URL 下面，让「地址是自动填好的」一目了然
+
   const [presetLabel, setPresetLabel] = useState("");
 
-  /**
-   * 表单当前反映的是哪个 pane。
-   *
-   * 切换左侧列表和「一键填充预设」都会把 pane 改成 "new"，但只有前者需要清空
-   * 表单——预设刚填好的 Base URL 会被同步 effect 当成「切到了新建」清掉。
-   * 记下表单已经对上哪个 pane，同步时对上了就跳过。
-   */
   const formPaneRef = useRef<PaneKey | null>(null);
-  // 填完预设后把光标送到唯一还需要用户动手的地方（API Key）
+
   const apiKeyRef = useRef<HTMLInputElement | null>(null);
   const [focusKeyToken, setFocusKeyToken] = useState(0);
 
-  // 分享表单
   const [shareTitle, setShareTitle] = useState("");
   const [shareNote, setShareNote] = useState("");
   const [sharing, setSharing] = useState(false);
@@ -141,7 +119,7 @@ function AiSettingsView() {
       .aiStatus()
       .then((next) => {
         applyStatus(next);
-        // 默认选中当前生效的那条，没有就打开"新建"
+
         if (next.active_config_id) setPane(`config:${next.active_config_id}`);
         else if (next.adopted_share && next.active_share_id) setPane("adopted");
         else if (next.configs.length > 0) setPane(`config:${next.configs[0].id}`);
@@ -157,16 +135,14 @@ function AiSettingsView() {
   const myShares = status?.shares.filter((s) => s.is_mine) ?? [];
   const otherShares = status?.shares.filter((s) => !s.is_mine) ?? [];
 
-  /** 当前正在编辑的那条供应商；新建时为 null。 */
   const editing: AiProviderConfig | null = useMemo(() => {
     if (!status || !pane.startsWith("config:")) return null;
     const id = Number(pane.slice("config:".length));
     return status.configs.find((c) => c.id === id) ?? null;
   }, [status, pane]);
 
-  /** 把表单填成某条供应商（或清空准备新建）。 */
   const fillForm = useCallback((config: AiProviderConfig | null) => {
-    // 记下这次填的是哪条：同步 effect 据此判断表单要不要重新载入
+
     formPaneRef.current = config ? (`config:${config.id}` as PaneKey) : "new";
     setName(config?.name ?? "");
     setBaseUrl(config?.base_url ?? "");
@@ -180,7 +156,6 @@ function AiSettingsView() {
     setPresetLabel("");
   }, []);
 
-  /** 切换右侧详情，顺手清掉上一条的提示，避免串台。 */
   const selectPane = useCallback((key: PaneKey) => {
     setPane(key);
     setError("");
@@ -188,8 +163,6 @@ function AiSettingsView() {
     setWarning("");
   }, []);
 
-  // 切换选中的供应商时同步表单。表单已经对上了就跳过，否则会把手动填好的
-  // 预设（applyPreset 填完地址后同样把 pane 设成 "new"）当成切换给冲掉。
   useEffect(() => {
     if (formPaneRef.current === pane) return;
     if (pane === "new") fillForm(null);
@@ -207,10 +180,6 @@ function AiSettingsView() {
     setNotice("");
     setWarning("");
 
-    // 这里不要再调用 fillForm(null)：它会连续触发一组“清空新建表单”的
-    // state 更新，和下面的预设填充更新混在一起时，React 的并发调度可能让
-    // 最终画面又回到空地址。一次性把表单标记为 new，并明确写入每个字段，
-    // 同步 effect 看到同一个 pane 后也不会覆盖预设值。
     formPaneRef.current = "new";
     setPane("new");
     setName(preset.custom ? "" : preset.label);
@@ -225,8 +194,7 @@ function AiSettingsView() {
     setPresetLabel(preset.custom ? "" : preset.label);
 
     if (preset.custom) {
-      // 自定义供应商只预选协议，地址、模型名都交给用户；Base URL 下面那排
-      // 「快速填入」留着他随时抄一个常见服务商的地址
+
       setNotice("选好接入协议后填入 Base URL 与 API Key，再添加模型；地址记不住就点下面的常见服务商");
       return;
     }
@@ -234,12 +202,6 @@ function AiSettingsView() {
     setFocusKeyToken((token) => token + 1);
   }
 
-  /**
-   * 表单里的一键填入：只补地址、协议（以及空着的名称和模型）。
-   *
-   * 走「创建自定义供应商」进来的人也一样要填 Base URL，这里让常见服务商
-   * 的地址随手可得——不用去背、也不用回目录里重新选一次。
-   */
   function quickFill(preset: AiPreset) {
     setError("");
     setNotice("");
@@ -358,8 +320,7 @@ function AiSettingsView() {
         config_id: editing?.id ?? null,
         model: activeModel,
       });
-      // 服务端在「模型名被否掉」时会带回真实可用的模型名：直接放进候选列表，
-      // 用户点一下就能换成能用的名字，不用再对着 400 猜。
+
       const suggested = result.suggested_models ?? [];
       if (suggested.length > 0) {
         setFetched((prev) => [...new Set([...prev, ...suggested])]);
@@ -367,7 +328,7 @@ function AiSettingsView() {
       if (!result.success) {
         setError(result.message);
       } else if (result.status === "warn") {
-        // 地址和 Key 都没问题，只是模型这次太慢：给黄色提示，别让用户以为填错了
+
         setWarning(result.message);
       } else {
         setNotice(result.message);
@@ -526,7 +487,6 @@ function AiSettingsView() {
       </section>
 
       <div className="card grid gap-0 overflow-hidden md:grid-cols-[260px_1fr]">
-        {/* 左侧：来源列表 */}
         <aside className="border-b border-slate-200 bg-slate-50/60 p-3 md:border-b-0 md:border-r">
           <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             我的接入（{configs.length}）
@@ -678,7 +638,6 @@ function AiSettingsView() {
           )}
         </aside>
 
-        {/* 右侧：详情 */}
         <div className="p-5">
           {pane === "new" || editing ? (
             <form onSubmit={handleSave} className="space-y-4" autoComplete="off">
@@ -724,7 +683,7 @@ function AiSettingsView() {
                     onChange={(event) => {
                       setBaseUrl(event.target.value);
                       setFetched([]);
-                      // 手动改了地址就不再算「预设填好的」
+
                       setPresetLabel("");
                     }}
                     placeholder="https://api.example.com/v1"
@@ -737,7 +696,6 @@ function AiSettingsView() {
                     已按「{presetLabel}」预设填好，可自行修改
                   </p>
                 ) : null}
-                {/* 常见服务商的一键填入：自定义供应商也能抄地址，不用背域名 */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                   <span className="text-[11px] text-slate-400">快速填入：</span>
                   {presetsByGroup("常见服务商").map((preset) => (
@@ -906,7 +864,6 @@ function AiSettingsView() {
                   ) : null}
                 </div>
 
-                {/* 测试连接失败时服务端带回来的真实模型名：点一下直接换成能用的 */}
                 {fetched.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] text-slate-400">
@@ -1116,7 +1073,6 @@ function AiSettingsView() {
         </div>
       </div>
 
-      {/* 添加供应商目录 */}
       <Modal
         open={catalogOpen}
         onClose={() => setCatalogOpen(false)}
@@ -1148,7 +1104,6 @@ function AiSettingsView() {
                       <span className="block truncate text-sm font-medium text-slate-900">
                         {preset.label}
                       </span>
-                      {/* 卡片上直接写清会填进去的地址：选之前就知道 Base URL 是什么 */}
                       <span
                         className={`block truncate text-[11px] ${
                           preset.custom
@@ -1175,7 +1130,6 @@ function AiSettingsView() {
         })}
       </Modal>
 
-      {/* 分享给别人 */}
       <Modal
         open={shareOpen}
         onClose={() => setShareOpen(false)}

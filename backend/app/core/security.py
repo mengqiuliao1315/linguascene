@@ -27,7 +27,6 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def apply_password(user, password: str) -> None:
-    """设置登录密码并作废已发出的访问令牌。"""
     if len(password.encode("utf-8")) > 72:
         raise ValueError("密码过长，请缩短后再试")
     user.password_hash = hash_password(password)

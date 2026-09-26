@@ -1,15 +1,9 @@
-"""AI 模型分享：分享、停用、删除、采纳、弹窗关闭、解析优先级。
-
-只验证接口与解析行为，不发起真实模型请求（测试环境 AI_PROVIDER=mock）。
-"""
-
 import uuid
 
 from app.core.crypto import decrypt_secret
 
 
 def _register_and_login(client, prefix: str) -> dict:
-    """注册一个普通用户并返回其 Authorization 头。"""
     suffix = uuid.uuid4().hex[:8]
     username = f"{prefix}{suffix}"
     email = f"{username}@example.com"
@@ -33,7 +27,6 @@ def _make_config(
     model="shared-model",
     api_key="sk-shared-key",
 ) -> dict:
-    """配好一条自己的供应商，返回它。"""
     response = client.post(
         "/api/ai-settings/configs",
         headers=headers,
@@ -59,16 +52,12 @@ def _new_share(client, headers=None, *, title="分享的模型", **extra) -> dic
     return response.json()
 
 
-# ------------------------------------------------------------------ 分享增删
-
-
 def test_create_share_never_returns_key(auth_client):
     body = _new_share(auth_client, {}, title="我的 DeepSeek", note="随便用，别刷太多")
     assert body["title"] == "我的 DeepSeek"
     assert body["active_model"] == "shared-model"
     assert body["is_active"] is True
     assert body["is_mine"] is True
-    # 明文 Key 绝不能出现在响应里
     assert "sk-shared-key" not in str(body)
     assert body["key_hint"].startswith("••••")
 
@@ -94,7 +83,6 @@ def test_share_stored_encrypted(auth_client):
 
 
 def test_share_requires_own_config(auth_client):
-    """分享的是自己的一条供应商，不存在就 404。"""
     response = auth_client.post(
         "/api/ai-shares", json={"config_id": 999999, "title": "没有这个供应商"}
     )
@@ -164,9 +152,6 @@ def test_delete_share_removes_for_everyone(auth_client, client):
     ).status_code == 404
 
 
-# ------------------------------------------------------------------ 采纳与解析
-
-
 def test_adopt_switches_provider_to_share(auth_client, client):
     share = _new_share(auth_client, {}, title="分享的模型")
 
@@ -188,7 +173,6 @@ def test_cannot_adopt_own_share(auth_client):
 
 
 def test_owner_deleting_share_falls_back_for_adopter(auth_client, client):
-    """分享者删除后，采纳者自动回落，不再指向失效分享。"""
     share = _new_share(auth_client, {}, title="会被删掉")
 
     adopter = _register_and_login(client, "fallback")
@@ -201,21 +185,15 @@ def test_owner_deleting_share_falls_back_for_adopter(auth_client, client):
     auth_client.delete(f"/api/ai-shares/{share['id']}")
 
     status = client.get("/api/ai-settings", headers=adopter).json()
-    # 分享没了，测试环境回落到离线规则引擎
     assert status["active_source"] == "mock"
-    # 采纳记录被级联清掉，状态里不再有失效分享
     assert status["adopted_share"] is None
 
 
 def test_own_share_not_in_available_list(auth_client):
-    """自己的分享只出现在 mine 里，不出现在 available 里。"""
     share = _new_share(auth_client, {}, title="自己的分享")
     body = auth_client.get("/api/ai-shares").json()
     assert any(s["id"] == share["id"] for s in body["mine"])
     assert all(s["id"] != share["id"] for s in body["available"])
-
-
-# ------------------------------------------------------------------ 登录弹窗
 
 
 def test_prompt_shows_share_for_unconfigured_user(auth_client, client):
@@ -247,7 +225,6 @@ def test_dismissed_share_not_prompted_again(auth_client, client):
 
     client.post(f"/api/ai-shares/{share['id']}/dismiss", headers=user)
 
-    # 会话级共享测试库，其他用例可能留下别的分享；只断言这条不再出现。
     second = client.get("/api/ai-shares/prompt", headers=user).json()
     assert second["share"] is None or second["share"]["id"] != share["id"]
 
@@ -268,11 +245,7 @@ def test_disabled_share_not_prompted(auth_client, client):
     )
 
 
-# ------------------------------------------------------------------ 解析单元测试
-
-
 def test_explicit_selection_beats_auto_pick():
-    """同时有自己的供应商和采纳的分享时，以用户选中的那条为准。"""
     from sqlalchemy import select
 
     from app.core.database import SessionLocal
@@ -309,14 +282,12 @@ def test_explicit_selection_beats_auto_pick():
         db.add(adopter)
         db.flush()
 
-        # 采纳分享后生效的是分享
         ai_config_service.adopt_share(db, adopter, share)
         db.flush()
         resolved = ai_config_service.resolve_provider(db, adopter)
         assert resolved.source == "share"
         assert resolved.provider.model == "unit-shared"
 
-        # 添了自己的供应商并选中后，改用自己的
         config = ai_config_service.create_config(
             db,
             adopter,
@@ -337,7 +308,6 @@ def test_explicit_selection_beats_auto_pick():
 
 
 def test_disabled_share_provider_is_none():
-    """停用的分享不再能构造 provider。"""
     from app.services import ai_config_service
     from app.models.ai_config import AiShare
 

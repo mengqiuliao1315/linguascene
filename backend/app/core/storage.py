@@ -1,5 +1,3 @@
-"""文件存储抽象。默认写本地磁盘，设置 STORAGE_BACKEND=s3 后走 S3 兼容对象存储。"""
-
 import hashlib
 import logging
 from abc import ABC, abstractmethod
@@ -13,17 +11,12 @@ logger = logging.getLogger(__name__)
 ALLOWED_UPLOAD_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".srt", ".vtt", ".json"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
-# 头像与内容上传分开：只收图片，体积也限制得更小，避免小内存服务器被塞满
 AVATAR_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
 AVATAR_DIR = Path(__file__).resolve().parents[2] / "storage" / "avatars"
 
 
 def save_avatar(filename: str, raw: bytes) -> str:
-    """保存头像，返回可直接用于 <img src> 的 URL 路径。
-
-    文件名带内容哈希与时间戳，既避免重名覆盖，也让旧头像在换新后自然失效。
-    """
     AVATAR_DIR.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha1(raw).hexdigest()[:16]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
@@ -33,7 +26,6 @@ def save_avatar(filename: str, raw: bytes) -> str:
 
 
 def avatar_path(url_or_name: str) -> Path | None:
-    """把头像 URL 还原为本地路径；只认文件名，防止路径穿越。"""
     name = Path(url_or_name).name
     if not name:
         return None
@@ -42,7 +34,6 @@ def avatar_path(url_or_name: str) -> Path | None:
 
 
 def delete_avatar(url: str | None) -> None:
-    """删除被替换掉的头像文件，失败不报错。"""
     if not url:
         return
     path = avatar_path(url)
@@ -50,13 +41,11 @@ def delete_avatar(url: str | None) -> None:
         path.unlink(missing_ok=True)
 
 
-# 论坛配图：用户发帖时引用的图片，与头像分开存放，便于单独限额与清理
 FORUM_IMAGE_DIR = Path(__file__).resolve().parents[2] / "storage" / "forum"
 MAX_FORUM_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 def save_forum_image(filename: str, raw: bytes) -> str:
-    """保存论坛配图，返回可直接用于 Markdown ![]() 的 URL 路径。"""
     FORUM_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha1(raw).hexdigest()[:16]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
@@ -66,7 +55,6 @@ def save_forum_image(filename: str, raw: bytes) -> str:
 
 
 def forum_image_path(url_or_name: str) -> Path | None:
-    """把论坛图片 URL 还原为本地路径；只认文件名，防止路径穿越。"""
     name = Path(url_or_name).name
     if not name:
         return None
@@ -153,6 +141,5 @@ def get_storage() -> StorageBackend:
 
 
 def reset_storage() -> None:
-    """测试用：丢掉已选中的存储后端。"""
     global _storage
     _storage = None

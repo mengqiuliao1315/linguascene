@@ -1,8 +1,3 @@
-"""个人词库与间隔复习。
-
-第一版使用简化的 SM-2 思路：掌握度决定下次复习间隔，不引入机器学习。
-"""
-
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -11,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.models.learning import UserVocabulary, Vocabulary
 from app.models.user import User
 
-# 掌握度 -> 下次复习间隔（天）
 INTERVALS = [(0.3, 1), (0.5, 2), (0.7, 4), (0.85, 7), (1.01, 15)]
 
 
@@ -60,7 +54,6 @@ def save_word(
     level: str = "B1",
     source: str = "reading",
 ) -> tuple[UserVocabulary, bool]:
-    """返回 (记录, 是否新增)。重复加入不会重复计数。"""
     vocab = get_or_create_word(db, word, meaning, phonetic, example, level)
     existing = db.execute(
         select(UserVocabulary).where(
@@ -120,7 +113,6 @@ def list_words(db: Session, user: User, due_only: bool = False) -> list[dict]:
 
 
 def review_word(db: Session, user: User, vocabulary_id: int, quality: int) -> dict | None:
-    """quality: 0 忘记 / 1 模糊 / 2 记得。掌握度与间隔随之调整。"""
     record = db.execute(
         select(UserVocabulary).where(
             UserVocabulary.user_id == user.id,

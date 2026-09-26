@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -19,8 +19,11 @@ from app.services import gamification_service, levels, vocabulary_service
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
+_LOCAL_TZ = timezone(timedelta(hours=8))
+
+
 def _greeting() -> str:
-    hour = datetime.now(timezone.utc).hour
+    hour = datetime.now(_LOCAL_TZ).hour
     if hour < 5:
         return "Good night"
     if hour < 12:
@@ -37,7 +40,6 @@ def dashboard(
 ) -> DashboardOut:
     level, level_name = levels.level_for_xp(user.xp)
 
-    # 推荐规则：优先用户未完成、且与最近学习内容同类的场景
     recent_ids = [
         r
         for r in db.execute(

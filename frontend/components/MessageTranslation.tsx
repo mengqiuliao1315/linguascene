@@ -5,7 +5,6 @@ import { useState } from "react";
 import { WordPopover } from "@/components/WordPopover";
 import { loadTranslation } from "@/lib/chat";
 
-/** 英文原句按单词切开，保留标点，方便只给单词加点击。 */
 const TOKEN_PATTERN = /([A-Za-z][A-Za-z'-]*)/g;
 
 function tokenize(text: string): { value: string; isWord: boolean }[] {
@@ -25,15 +24,6 @@ function tokenize(text: string): { value: string; isWord: boolean }[] {
   return parts;
 }
 
-/**
- * AI 消息下方的翻译入口。
- *
- * 点开显示整句中文；句中单词可再点开查词，看不懂时不必离开对话。
- *
- * 走的是只问一句中文的轻量端点（/api/ai/translate），并且在 AI 回复到达时
- * 就已经预取过，所以点开通常是即时的——早先这里复用句子分析，模型要一并
- * 产出主干、搭配、语法，输出多好几倍，点一下要等十秒上下。
- */
 export function MessageTranslation({ content }: { content: string }) {
   const [open, setOpen] = useState(false);
   const [translation, setTranslation] = useState("");

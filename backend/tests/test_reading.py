@@ -1,5 +1,3 @@
-"""精读功能：切句、逐句讲解、笔记、公开分享、PDF 导出。"""
-
 import io
 import json
 import time
@@ -20,9 +18,6 @@ def _article_payload() -> dict:
     }
 
 
-# ------------------------------------------------------------------ 单元
-
-
 def test_split_sentences_basic():
     text = "First sentence here. Second one follows! Third?"
     parts = split_sentences(text)
@@ -37,7 +32,6 @@ def test_split_sentences_basic():
 def test_split_sentences_keeps_abbreviations_together():
     text = "Dr. Smith arrived at 9 a.m. He was early."
     sentences = [s for _, s in split_sentences(text)]
-    # "Dr." 不应被当成句末
     assert sentences[0].startswith("Dr. Smith")
     assert len(sentences) == 2
 
@@ -49,11 +43,6 @@ def test_split_sentences_separates_paragraphs():
 
 
 def test_split_sentences_handles_missing_space_after_punctuation():
-    """PDF 抽出来的文本常丢句间空格，整段不能被当成一句。
-
-    pypdf 抽出的是 "work?Sometimes"，只认「标点 + 空白」的话 433 词的
-    文章会变成一句，模型要一口气翻译整篇，既慢又不是逐句讲解。
-    """
     text = (
         "What does self-discipline look like at work?Sometimes it is the ability "
         "to resist temptation.Other times it is the ability to persist."
@@ -66,22 +55,17 @@ def test_split_sentences_handles_missing_space_after_punctuation():
 
 
 def test_iter_analyses_emits_in_sentence_order(monkeypatch):
-    """并发跑的批，谁先跑完都得按句序吐。
-
-    不然下面那句会抢在上面还没就绪时先出现在页面上，读起来是跳的。
-    """
     segments = [(0, f"First sentence {i}.") for i in range(6)]
 
     class _Agent:
         def analyze_batch_with_status(self, texts, level, context=None):
-            # 第一批故意最慢：它一定最后完成，但吐出来还得排在最前面
             if texts[0] == "First sentence 0.":
                 time.sleep(0.3)
             return [(object(), True) for _ in texts]
 
     class _Tuner:
         def current(self):
-            return 2, 2  # 3 批、2 并发：完成顺序和句序必然错开
+            return 2, 2
 
     monkeypatch.setattr(reading_service, "get_batch_tuner", lambda: _Tuner())
 
@@ -95,22 +79,16 @@ def test_iter_analyses_emits_in_sentence_order(monkeypatch):
 
 
 def test_chunk_indexes_runs_first_sentence_alone():
-    """第一句单独成批：模型一次往返约 10s 固定等待，首句不该陪整批等。
-
-    其余句子照常按 batch_size 分，不能因为拆出首句就把批数翻上去。
-    """
     assert reading_service._chunk_indexes(5, 4) == [[0], [1, 2, 3, 4]]
     assert reading_service._chunk_indexes(22, 4) == [
         [0], [1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12],
         [13, 14, 15, 16], [17, 18, 19, 20], [21],
     ]
-    # 短材料也要让第一句尽快返回，尾句继续批量处理
     assert reading_service._chunk_indexes(3, 4) == [[0], [1, 2]]
     assert reading_service._chunk_indexes(4, 4) == [[0], [1, 2, 3]]
 
 
 def test_split_sentences_drops_non_english_lines():
-    """中文标题/译文段落不该占一个「句子」的位置。"""
     text = "2026 年 6 月英语六级真题\n\nEnglish only here. Second one follows."
     assert [s for _, s in split_sentences(text)] == [
         "English only here.",
@@ -119,7 +97,6 @@ def test_split_sentences_drops_non_english_lines():
 
 
 def test_upload_drops_chinese_lines_but_keeps_inline_gloss(auth_client):
-    """上传的中文不进平台，行内中文注解的英文句子仍保留。"""
     text = (
         "中文标题\n\n"
         "Schools are a microcosm (缩影) of society.\n\n"
@@ -135,7 +112,6 @@ def test_upload_drops_chinese_lines_but_keeps_inline_gloss(auth_client):
 
 
 def test_open_material_ignores_cache_from_old_splitting(auth_client):
-    """旧切句逻辑留下的缓存（整段算一句）不能再显示，得按新切句重新生成。"""
     text = "First one here. Second one follows! Third?"
     content_id = auth_client.post(
         "/api/reading/materials/upload",
@@ -143,7 +119,6 @@ def test_open_material_ignores_cache_from_old_splitting(auth_client):
         data={"title": "Stale"},
     ).json()["id"]
 
-    # 伪造一份「整段一句」的老缓存
     from app.core.database import SessionLocal
     from app.models.content import UserContent
 
@@ -177,12 +152,8 @@ def test_lemmatize_irregular_and_suffixes():
     assert lemmatize("changed") == "change"
     assert lemmatize("studies") == "study"
     assert lemmatize("running") == "run"
-    # 不该把正常词砍坏
     assert lemmatize("business") == "business"
     assert lemmatize("class") == "class"
-
-
-# ------------------------------------------------------------------ 精读流程
 
 
 def test_analyze_article_returns_sentences_with_words_and_phrases(auth_client):
@@ -196,12 +167,10 @@ def test_analyze_article_returns_sentences_with_words_and_phrases(auth_client):
     first = sentences[0]
     assert first["text"]
     assert first["index"] == 0
-    # 第一句含 "has ... changed the way"，应命中完成时与固定搭配
     assert any("Present Perfect" == g["point"] for g in first["grammar"]) or first["grammar"]
     assert first["phrases"], "应能识别出固定搭配"
     assert first["words"], "应能挑出重点单词"
 
-    # 单词必须带原型
     for word in first["words"]:
         assert word["lemma"]
 
@@ -256,12 +225,10 @@ def test_upload_then_read_and_notes(auth_client):
     second = detail["sentences"][1]
     assert any(n["text"] == "adapt to" for n in second["notes"])
 
-    # 加入词库
     promoted = auth_client.post(f"/api/reading/notes/{note_id}/to-vocabulary")
     assert promoted.status_code == 200
     assert promoted.json()["in_vocabulary"] is True
 
-    # 删除笔记
     assert auth_client.delete(f"/api/reading/notes/{note_id}").status_code == 204
     assert auth_client.get(f"/api/reading/materials/content/{content_id}").json()["note_count"] == 0
 
@@ -276,7 +243,6 @@ def test_unpublished_content_is_private_until_shared(auth_client, client):
     ).json()
     content_id = upload["id"]
 
-    # 另一个用户看不到未公布的材料
     other = client.post("/api/auth/register", json=_article_payload()).json()
     headers = {"Authorization": f"Bearer {other['access_token']}"}
     assert (
@@ -284,7 +250,6 @@ def test_unpublished_content_is_private_until_shared(auth_client, client):
         == 403
     )
 
-    # 公布后即可阅读，并且能在这基础上写自己的笔记
     assert auth_client.post(
         f"/api/reading/materials/content/{content_id}/publish?is_public=true"
     ).status_code == 200
@@ -303,13 +268,11 @@ def test_unpublished_content_is_private_until_shared(auth_client, client):
     )
     assert mine.status_code == 201
 
-    # 两人的笔记互不干扰
     owner_detail = auth_client.get(
         f"/api/reading/materials/content/{content_id}"
     ).json()
     assert owner_detail["note_count"] == 0
 
-    # 取消公布后重新变为私有
     auth_client.post(f"/api/reading/materials/content/{content_id}/publish?is_public=false")
     assert (
         client.get(f"/api/reading/materials/content/{content_id}", headers=headers).status_code
@@ -325,15 +288,7 @@ def test_export_pdf_returns_pdf_bytes(auth_client):
     assert len(response.content) > 1000
 
 
-# ------------------------------------------------------ 导出：批注不能漏
-
-
 def test_annotation_cell_keeps_anchor_and_body():
-    """划词写的笔记：text 是锚定原文、note 才是正文，导出时两个都要留。
-
-    之前按 kind 分支渲染，kind="note" 只输出 note，导出的 PDF 里
-    只剩一句"显著地"，读者不知道说的是哪个词。
-    """
     cell = pdf_service._annotation_cell(
         [
             {
@@ -351,11 +306,6 @@ def test_annotation_cell_keeps_anchor_and_body():
 
 
 def test_annotation_cell_keeps_every_field_and_drops_category_text():
-    """释义和用户正文都不能省；分类既不印文字，也不再用颜色表示。
-
-    卡片上省掉「生词/好句」那一行、也去掉色条和底色，都是为了省纸省墨——
-    分类看正文高亮的颜色就够了，右栏再刷一遍只是把一栏铺满噪声。
-    """
     cell = pdf_service._annotation_cell(
         [
             {
@@ -383,9 +333,7 @@ def test_annotation_cell_skips_empty_notes():
 
 
 def test_highlight_prefers_stored_offsets():
-    """同一个词出现两次时，只有区间能指回用户选中的那一处。"""
     sentence = "The bank raised rates, then the bank cut them."
-    # "The bank raised rates, then the " 占 0..32，第二处 bank 在 [32, 36)
     start = sentence.rindex("bank")
     assert start == 32
     html = pdf_service._highlight_sentence(
@@ -400,14 +348,12 @@ def test_highlight_prefers_stored_offsets():
             }
         ],
     )
-    # 只有第二处 bank 上色，第一处保持原样
     assert html.startswith("The bank raised rates, then the ")
     assert html.count("backColor") == 1
     assert html.endswith('<font backColor="#dbeafe">bank</font> cut them.')
 
 
 def test_highlight_falls_back_to_text_for_legacy_notes():
-    """老笔记没有区间，仍按文本匹配上色。"""
     html = pdf_service._highlight_sentence(
         "The rapid development of AI.",
         [
@@ -424,7 +370,6 @@ def test_highlight_falls_back_to_text_for_legacy_notes():
 
 
 def test_highlight_covers_note_kind_with_offsets():
-    """划词写的笔记（kind="note"）也要在原文里标出来。"""
     sentence = "The rapid development of AI."
     html = pdf_service._highlight_sentence(
         sentence,
@@ -442,7 +387,6 @@ def test_highlight_covers_note_kind_with_offsets():
 
 
 def test_highlight_does_not_paint_sentence_note_body():
-    """整句笔记的 text 是笔记正文，不在原文里，不能拿它去染色。"""
     sentence = "The rapid development of AI."
     html = pdf_service._highlight_sentence(
         sentence,
@@ -477,7 +421,6 @@ def test_highlight_ignores_out_of_range_offsets():
 
 
 def test_export_pdf_contains_user_annotations(auth_client):
-    """导出接口要真的把用户批注写进 PDF，而不是只回一个能打开的文件。"""
     from pypdf import PdfReader
 
     content_id = _upload_and_analyze(
@@ -504,7 +447,6 @@ def test_export_pdf_contains_user_annotations(auth_client):
     text = "\n".join(page.extract_text() for page in reader.pages)
     assert "development" in text
     assert "名词，发展" in text
-    # 批注栏在（分类现在靠色条，不是文字，抽不出文本可断言）
     assert "批注" in text
 
 
@@ -525,7 +467,6 @@ def _upload_and_analyze(client, text: str) -> int:
 
 
 def test_note_offsets_round_trip(auth_client):
-    """字符区间要原样存取，前端据此精确染色。"""
     content_id = _upload_and_analyze(
         auth_client, "The bank raised rates. I sat by the bank."
     )
@@ -546,12 +487,10 @@ def test_note_offsets_round_trip(auth_client):
     body = created.json()
     assert (body["start_offset"], body["end_offset"]) == (15, 19)
 
-    # 详情页把区间一起带给前端
     detail = auth_client.get(f"/api/reading/materials/content/{content_id}").json()
     note = detail["sentences"][1]["notes"][0]
     assert (note["start_offset"], note["end_offset"]) == (15, 19)
 
-    # 不带区间的老式请求仍然是 0/0，前端会回退到文本匹配
     legacy = auth_client.post(
         f"/api/reading/materials/content/{content_id}/notes",
         json={"sentence_index": 0, "kind": "word", "text": "bank"},
@@ -560,7 +499,6 @@ def test_note_offsets_round_trip(auth_client):
 
 
 def test_suggest_returns_offsets_matching_sentence(auth_client):
-    """建议里的区间必须能在原文里逐字对上，否则前端会画错位置。"""
     content_id = _upload_and_analyze(
         auth_client, "These systems analyse mistakes and adjust the difficulty."
     )
@@ -579,13 +517,11 @@ def test_suggest_returns_offsets_matching_sentence(auth_client):
         for span in spans:
             start, end = span["start_offset"], span["end_offset"]
             assert 0 <= start < end <= len(sentence)
-            # 区间切出来必须就是建议里那段原文
             assert sentence[start:end] == span["text"]
             assert span["color"] in {"blue", "green", "amber", "rose", "violet"}
 
 
 def test_suggest_stream_sends_one_event_per_sentence(auth_client):
-    """建议要跑完一句发一句；区间同样必须能在原文里逐字对上。"""
     content_id = _upload_and_analyze(
         auth_client,
         "These systems analyse mistakes and adjust the difficulty. "
@@ -607,7 +543,6 @@ def test_suggest_stream_sends_one_event_per_sentence(auth_client):
     assert events[-1][1]["sentence_count"] == 2
 
     streamed = [data for event, data in events if event == "sentence"]
-    # 并发是谁先跑完谁先发，事件顺序不保证；句索引必须齐全
     assert sorted(item["index"] for item in streamed) == [0, 1]
 
     detail = auth_client.get(f"/api/reading/materials/content/{content_id}").json()
@@ -624,25 +559,19 @@ def test_suggest_stream_requires_login(client):
 
 
 def test_suggest_drops_spans_not_in_sentence():
-    """模型改写过、原文里找不到的 span 必须丢掉，不能污染原文。"""
     from app.ai.agents.annotation_agent import AnnotationAgent
     from app.ai.schemas import AnnotationSuggestions, SuggestedSpan
 
-    agent = AnnotationAgent.__new__(AnnotationAgent)  # 不碰 provider
+    agent = AnnotationAgent.__new__(AnnotationAgent)
     sentence = "The learner can't adapt to new tools easily."
 
     cleaned = agent._validate(
         AnnotationSuggestions(
             spans=[
-                # 原文是 can't，模型写成了 cannot —— 必须丢
                 SuggestedSpan(text="cannot adapt", color="blue"),
-                # 大小写不同但原文能找到 —— 保留，且归一成原文写法
                 SuggestedSpan(text="ADAPT TO", color="green"),
-                # 完全编的 —— 丢
                 SuggestedSpan(text="a phrase that is not here", color="blue"),
-                # 整句 —— 丢
                 SuggestedSpan(text=sentence, color="amber"),
-                # 非法颜色回退成 blue
                 SuggestedSpan(text="new tools", color="chartreuse"),
             ]
         ),
@@ -655,7 +584,6 @@ def test_suggest_drops_spans_not_in_sentence():
 
 
 def test_build_suggestions_offsets_repeated_words():
-    """同一个词出现两次时，两条建议应指向不同位置。"""
     from app.services.reading_service import build_suggestions
 
     sentence = "The bank raised rates and the bank stayed open."
@@ -674,7 +602,6 @@ def test_build_suggestions_offsets_repeated_words():
 
 
 def test_update_note_color_keeps_body(auth_client):
-    """只改颜色不能把笔记正文清掉。"""
     content_id = _upload_and_analyze(auth_client, "One sentence only here.")
 
     note = auth_client.post(
@@ -695,7 +622,6 @@ def test_update_note_color_keeps_body(auth_client):
     assert recolored.json()["color"] == "rose"
     assert recolored.json()["note"] == "这句是总起"
 
-    # 显式改正文时仍然生效
     updated = auth_client.patch(
         f"/api/reading/notes/{note['id']}", json={"note": "换个说法"}
     ).json()
@@ -704,7 +630,6 @@ def test_update_note_color_keeps_body(auth_client):
 
 
 def test_update_note_meaning_can_be_fixed(auth_client):
-    """模型给的释义不一定准，用户改完不能动到锚定原文和颜色。"""
     content_id = _upload_and_analyze(auth_client, "One sentence only here.")
 
     note = auth_client.post(
@@ -726,7 +651,6 @@ def test_update_note_meaning_can_be_fixed(auth_client):
     assert fixed.json()["text"] == "here"
     assert fixed.json()["color"] == "amber"
 
-    # 清空释义也是合法操作：空串不等于「本次不改」
     cleared = auth_client.patch(
         f"/api/reading/notes/{note['id']}", json={"meaning": ""}
     ).json()
@@ -735,11 +659,6 @@ def test_update_note_meaning_can_be_fixed(auth_client):
 
 
 def test_highlight_rect_is_rounded():
-    """批注底色画圆角：实心无描边那一笔换成 roundRect，其余矩形原样透传。
-
-    reportlab 的 <font backColor> 是直角方块，圆角靠接管 canvas.rect 实现，
-    这里锁住「只换高亮、不误伤别的矩形」这条边界。
-    """
     calls: list[tuple] = []
 
     class FakeCanvas:
@@ -754,7 +673,6 @@ def test_highlight_rect_is_rounded():
         FakeCanvas(), original_rect, font_size=font_size, leading=leading
     )
 
-    # 高亮：stroke=0 / fill=1 → 圆角
     replace(10, 20, 40, leading, stroke=0, fill=1)
     name, args, kwargs = calls[-1]
     assert name == "roundRect"
@@ -763,13 +681,11 @@ def test_highlight_rect_is_rounded():
     assert radius == pdf_service.HIGHLIGHT_RADIUS
     assert kwargs == {"stroke": 0, "fill": 1}
 
-    # 关键：色块不再等于行距，而是贴着字形；底边落在基线下方一点
     baseline = 20 + leading - font_size
     assert height == pytest.approx(font_size * pdf_service.HIGHLIGHT_HEIGHT_RATIO)
     assert y == pytest.approx(baseline - font_size * pdf_service.HIGHLIGHT_DROP_RATIO)
     assert height < leading
 
-    # 别的矩形（页眉卡片底色、各种框线）不能被改掉
     replace(0, 0, 100, 30, stroke=0, fill=0)
     assert calls[-1][0] == "rect"
     replace(0, 0, 100, 30, stroke=1, fill=1)
@@ -777,13 +693,11 @@ def test_highlight_rect_is_rounded():
 
 
 def test_highlight_box_is_shorter_than_the_line_height():
-    """色块必须比行距矮——按行距画出来的就是用户说的「太高了」。"""
     font_size, leading = pdf_service.FS_BODY, pdf_service.FS_BODY * pdf_service.LEAD_BODY
     assert font_size * pdf_service.HIGHLIGHT_HEIGHT_RATIO < leading
 
 
 def test_highlight_radius_is_clamped_to_narrow_boxes():
-    """短词的高亮块很窄，圆角半径要夹到宽度的一半，否则形状会画歪。"""
     calls: list[tuple] = []
 
     class FakeCanvas:
@@ -794,15 +708,10 @@ def test_highlight_radius_is_clamped_to_narrow_boxes():
         FakeCanvas(), lambda *a, **k: None, font_size=10.8, leading=16.42
     )
     replace(0, 0, 4, 16.42, stroke=0, fill=1)
-    assert calls[-1][4] == 2  # min(3, 4/2, 13.5/2)
+    assert calls[-1][4] == 2
 
 
 def test_same_word_is_only_noted_once(auth_client):
-    """同一个词/搭配在同一句里只能加一条批注。
-
-    芯片上的「+」加完会变成 ✓，再点它不该再落一条。前端靠按钮状态挡，后端也要
-    兜住双击、多开标签页、AI 建议和手动添加撞车这些前端状态拦不住的情况。
-    """
     text = "Learning a language takes time. You should adapt to new tools and adapt fast."
     upload = auth_client.post(
         "/api/reading/materials/upload",
@@ -821,34 +730,26 @@ def test_same_word_is_only_noted_once(auth_client):
     first = add(kind="word", text="adapt", meaning="适应", color="blue")
     assert first.status_code == 201
 
-    # 再点一次 ✓：拿回同一条，不新增
     again = add(kind="word", text="adapt", meaning="适应", color="blue")
     assert again.status_code == 201
     assert again.json()["id"] == first.json()["id"]
 
-    # 大小写不同也还是同一个词
     assert add(kind="word", text="Adapt").json()["id"] == first.json()["id"]
 
-    # 换一个搭配照常能加
     phrase = add(kind="phrase", text="pay attention to", color="green")
     assert phrase.json()["id"] != first.json()["id"]
 
-    # 带字符区间的批注不去重：同一个词在一句里出现两次时，
-    # 区间是区分它们唯一的依据，按文本去重会把第二次误判成重复。
     span_a = add(kind="word", text="adapt", start_offset=11, end_offset=16)
     span_b = add(kind="word", text="adapt", start_offset=33, end_offset=38)
     assert span_a.json()["id"] != span_b.json()["id"]
     assert span_a.json()["id"] != first.json()["id"]
 
-    # 自由笔记和词条是两回事，同一个锚点上允许并存
     free = add(kind="note", text="adapt", note="这里可以换成 adjust")
     assert free.status_code == 201
 
     detail = auth_client.get(f"/api/reading/materials/content/{content_id}").json()
-    # adapt 词条 1 条 + pay attention to 1 条 + 带区间的 adapt 2 条 + 自由笔记 1 条
     assert detail["note_count"] == 5
 
-    # 不同句子的同一个词互不影响
     assert add(kind="word", text="adapt", sentence_index=0).status_code == 201
     assert (
         auth_client.get(f"/api/reading/materials/content/{content_id}").json()["note_count"]
@@ -856,11 +757,7 @@ def test_same_word_is_only_noted_once(auth_client):
     )
 
 
-# ------------------------------------------------------------------ 逐句渐进返回
-
-
 def _parse_sse(body: str) -> list[tuple[str, dict]]:
-    """把 SSE 文本拆成 (事件名, 数据) 列表。"""
     events: list[tuple[str, dict]] = []
     for block in body.split("\n\n"):
         name = ""
@@ -876,10 +773,6 @@ def _parse_sse(body: str) -> list[tuple[str, dict]]:
 
 
 def test_analyze_stream_sends_skeleton_then_one_event_per_sentence(auth_client):
-    """先给全部句子的骨架，再一句一个事件，最后 done。
-
-    骨架必须在最前面：前端靠它立刻把原文排出来，不用等模型。
-    """
     with auth_client.stream(
         "GET", "/api/reading/materials/article/1/analyze/stream"
     ) as response:
@@ -901,14 +794,12 @@ def test_analyze_stream_sends_skeleton_then_one_event_per_sentence(auth_client):
 
     streamed = [data["sentence"] for event, data in events if event == "sentence"]
     assert len(streamed) == start["total"]
-    # 并发跑但按句序发，句索引必须齐全且有序
     assert [item["index"] for item in streamed] == list(range(start["total"]))
     assert all(item["notes"] == [] for item in streamed)
     assert all(item["text"] for item in streamed)
 
 
 def test_analyze_stream_persists_result_for_next_open(auth_client):
-    """流式跑完的结果要落库，下次打开直接复用，不再走模型。"""
     text = "Learning a language takes time. You should adapt to new tools."
     content_id = auth_client.post(
         "/api/reading/materials/upload",
@@ -929,6 +820,98 @@ def test_analyze_stream_persists_result_for_next_open(auth_client):
     assert detail["sentences"][0]["text"].startswith("Learning")
 
 
+def test_reopen_keeps_saved_analysis_without_calling_model(auth_client, monkeypatch):
+    text = "Learning a language takes time. You should adapt to new tools."
+    content_id = auth_client.post(
+        "/api/reading/materials/upload",
+        files={"file": ("remember.txt", text.encode("utf-8"), "text/plain")},
+        data={"title": "Remember me"},
+    ).json()["id"]
+
+    first = auth_client.post(f"/api/reading/materials/content/{content_id}/analyze")
+    assert first.status_code == 200
+    remembered = first.json()["sentences"][0]["translation"]
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("再次打开不该再分析")
+
+    monkeypatch.setattr(reading_service, "SentenceAgent", fail_if_called)
+
+    detail = auth_client.get(f"/api/reading/materials/content/{content_id}").json()
+    assert detail["sentences"][0]["translation"] == remembered
+
+    again = auth_client.post(f"/api/reading/materials/content/{content_id}/analyze")
+    assert again.status_code == 200
+    assert again.json()["sentences"][0]["translation"] == remembered
+
+
+def test_stream_keeps_analysis_when_client_drops_before_done(auth_client, monkeypatch):
+    real_store = reading_service._store_sentences
+
+    def store_then_drop(db, document, blob):
+        real_store(db, document, blob)
+        db.commit()
+        raise RuntimeError("客户端已断开")
+
+    monkeypatch.setattr(reading_service, "_store_sentences", store_then_drop)
+
+    text = "Learning a language takes time. You should adapt to new tools."
+    content_id = auth_client.post(
+        "/api/reading/materials/upload",
+        files={"file": ("drop.txt", text.encode("utf-8"), "text/plain")},
+        data={"title": "Dropped"},
+    ).json()["id"]
+
+    with auth_client.stream(
+        "GET", f"/api/reading/materials/content/{content_id}/analyze/stream"
+    ) as response:
+        assert response.status_code == 200
+        body = "".join(response.iter_text())
+
+    events = _parse_sse(body)
+    assert any(name == "sentence" for name, _ in events)
+    assert events[-1] == ("error", {"detail": "生成失败：客户端已断开"})
+
+    detail = auth_client.get(f"/api/reading/materials/content/{content_id}").json()
+    assert [item["text"] for item in detail["sentences"]] == [
+        "Learning a language takes time.",
+        "You should adapt to new tools.",
+    ]
+
+
+def test_failed_model_result_is_not_remembered(auth_client, monkeypatch):
+    from app.ai.provider import AIProviderError
+
+    text = "Learning a language takes time."
+    content_id = auth_client.post(
+        "/api/reading/materials/upload",
+        files={"file": ("fail.txt", text.encode("utf-8"), "text/plain")},
+        data={"title": "Failed"},
+    ).json()["id"]
+
+    class _Down:
+        is_mock = False
+        signature = "down"
+
+        def complete_json(self, *_args, **_kwargs):
+            raise AIProviderError("模型调用失败：timed out")
+
+        def complete_json_fast(self, *_args, **_kwargs):
+            raise AIProviderError("模型调用失败：timed out")
+
+    monkeypatch.setattr(
+        "app.services.ai_config_service.get_provider_for",
+        lambda *_args, **_kwargs: _Down(),
+    )
+
+    analyzed = auth_client.post(f"/api/reading/materials/content/{content_id}/analyze")
+    assert analyzed.status_code == 200
+    assert analyzed.json()["generated"] is False
+
+    detail = auth_client.get(f"/api/reading/materials/content/{content_id}").json()
+    assert detail["sentences"] == []
+
+
 def test_analyze_stream_requires_login(client):
     assert (
         client.get("/api/reading/materials/article/1/analyze/stream").status_code == 401
@@ -940,3 +923,47 @@ def test_analyze_stream_404_for_missing_material(auth_client):
         auth_client.get("/api/reading/materials/article/9999/analyze/stream").status_code
         == 404
     )
+
+
+def test_suggest_keeps_using_the_users_provider(auth_client, monkeypatch):
+    """标注建议这条链路必须把用户配置的模型透传给逐句讲解。
+
+    漏传 provider 时会回退到全局 mock，离线规则引擎的结果还会被写进
+    sentences_json，让用户之后一直看不到真实译文。
+    """
+    from app.ai.schemas import AnnotationSuggestions, SentenceAnalysis
+
+    text = "Learning a language takes time."
+    content_id = auth_client.post(
+        "/api/reading/materials/upload",
+        files={"file": ("stub.txt", text.encode("utf-8"), "text/plain")},
+        data={"title": "StubMaterial"},
+    ).json()["id"]
+
+    class _Stub:
+        is_mock = False
+        signature = "stub"
+        max_tokens = 1500
+
+        def complete_json(self, _system, _user, schema, max_tokens=None):
+            if schema is AnnotationSuggestions:
+                return {"spans": []}
+            assert schema is SentenceAnalysis
+            return {"sentence": text, "chinese_meaning": "标记译文"}
+
+        def complete_json_fast(self, system, user, schema, max_tokens=None):
+            return self.complete_json(system, user, schema, max_tokens)
+
+    monkeypatch.setattr(
+        "app.services.ai_config_service.get_provider_for",
+        lambda *_args, **_kwargs: _Stub(),
+    )
+
+    suggested = auth_client.post(
+        f"/api/reading/materials/content/{content_id}/suggest",
+        json={"sentence_indexes": [0]},
+    )
+    assert suggested.status_code == 200
+
+    detail = auth_client.get(f"/api/reading/materials/content/{content_id}").json()
+    assert detail["sentences"][0]["translation"] == "标记译文"

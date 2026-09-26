@@ -14,7 +14,6 @@ import {
   type WordCard,
 } from "@/lib/wordbook";
 
-/** 开始测验的设置面板：有未完成的测验时先问「继续」还是「重新抽题」。 */
 function QuizPanel({
   total,
   session,
@@ -101,7 +100,6 @@ function QuizPanel({
   );
 }
 
-/** 一道选择题：单词 + 4 个中文释义选项。选错的标红、正确的标绿，之后这题还会重新出现。 */
 function QuizQuestionCard({
   session,
   chosen,
@@ -109,9 +107,9 @@ function QuizQuestionCard({
   onAnswer,
 }: {
   session: QuizSession;
-  /** 用户在这道题选了哪一项，null 表示还没作答。 */
+
   chosen: string | null;
-  /** 接口返回的作答结果，与 chosen 一起决定配色。 */
+
   result: QuizAnswerResult | null;
   onAnswer: (choice: string) => void;
 }) {
@@ -156,7 +154,7 @@ function QuizQuestionCard({
         <p className="text-xs text-slate-400">选择正确的中文释义</p>
         {question.options.map((option, index) => {
           const isChosen = chosen === option;
-          // 答错时选中项标红、正确答案同时标绿；答对时只有选中项标绿。
+
           const isWrongPick = locked && isChosen && !correct;
           const isRightAnswer = locked && (correct ? isChosen : option === answerText);
           let style =
@@ -209,7 +207,6 @@ function QuizRunner({
     };
   }, []);
 
-  // 换到下一题时清掉上一题的作答反馈
   useEffect(() => {
     setChosen(null);
     setOutcome(null);
@@ -219,18 +216,17 @@ function QuizRunner({
     if (busy || !session.question) return;
     const wordId = session.question.word.id;
     setBusy(true);
-    // 先记住选了哪项，接口回来后连同 result 一起决定配色
+
     setChosen(choice);
     try {
       const res = await wordbookApi.quizAnswer(wordId, choice);
       setOutcome(res);
       setFlash(res.correct ? "答对了" : `正确答案：${res.answer}`);
-      // 留一点时间让用户看到对错，再切到下一题
+
       timer.current = setTimeout(
         () => {
           setSession(res.session);
-          // 答错的词被排到队尾，队列只剩它时下一题还是同一个单词 id，
-          // effect 不会触发，必须在这里显式清掉本题的作答反馈。
+
           setChosen(null);
           setOutcome(null);
           setFlash("");
@@ -240,7 +236,7 @@ function QuizRunner({
       );
     } catch {
       setFlash("提交失败，请重试");
-      // 提交失败要解锁选项，否则这题点不动了
+
       setChosen(null);
       setOutcome(null);
       setBusy(false);

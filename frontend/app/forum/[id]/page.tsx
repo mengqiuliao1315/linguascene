@@ -1,7 +1,3 @@
-/**
- * 帖子详情：正文 + 点赞 + 评论，作者可编辑，管理员可置顶。
- */
-
 "use client";
 
 import Link from "next/link";
@@ -16,7 +12,7 @@ import { socialApi, type ForumComment, type ForumPost } from "@/lib/social";
 
 function wasEdited(post: ForumPost) {
   if (!post.updated_at) return false;
-  // 创建与更新同秒时不算编辑
+
   return (
     new Date(post.updated_at).getTime() - new Date(post.created_at).getTime() > 1000
   );
@@ -51,7 +47,6 @@ function PostDetail() {
       .finally(() => setLoading(false));
   }, [postId]);
 
-  // 从列表的评论气泡跳进来时，锚点在首帧还不存在，等内容渲染完再滚过去
   useEffect(() => {
     if (loading) return;
     if (window.location.hash !== "#comments") return;

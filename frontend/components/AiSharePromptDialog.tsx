@@ -1,9 +1,3 @@
-/**
- * 登录后的模型分享弹窗。
- *
- * 别的用户分享了模型时，登录后弹一次：可以直接采纳来用，也可以关掉。
- * 关掉的分享服务端会记住，不再对当前用户推送。同一浏览器会话内不重复弹。
- */
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -38,7 +32,7 @@ export function AiSharePromptDialog() {
         if (result.available && result.share) setShare(result.share);
       })
       .catch(() => {
-        // 弹窗是锦上添花，取不到就静默跳过
+
       });
     return () => {
       cancelled = true;
@@ -53,7 +47,7 @@ export function AiSharePromptDialog() {
     try {
       await api.dismissAiShare(share.id);
     } catch {
-      // 关掉失败也无妨，本地收起即可
+
     } finally {
       setBusy(false);
       close();

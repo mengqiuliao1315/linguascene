@@ -1,5 +1,3 @@
-"""内容服务：文章阅读、AI 分析、划词解释、句子分析、用户上传。"""
-
 import json
 import re
 from pathlib import Path
@@ -43,7 +41,6 @@ def get_article(db: Session, article_id: int) -> Article | None:
 def analyze_article(
     db: Session, article: Article, cefr_level: str, provider: AIProvider | None = None
 ) -> ArticleAnalysis:
-    """文章分析结果持久化，同一篇文章不重复调用模型。"""
     if article.analysis:
         return article.analysis
 
@@ -85,7 +82,6 @@ def analysis_payload(analysis: ArticleAnalysis) -> dict:
 
 
 def _dictionary_examples(entry: Vocabulary) -> list[str]:
-    """词典条目里能直接展示的英文例句，最多两条。"""
     examples = [entry.example] if entry.example else []
     if examples or not entry.examples_json:
         return examples[:2]
@@ -114,14 +110,7 @@ def explain_word(
     db: Session | None = None,
     provider: AIProvider | None = None,
 ) -> dict:
-    """划词解释。
-
-    先查内置词典表（Vocabulary），命中即可直接返回，无需调用模型——
-    精读里划一个词等的就是中文意思，词典命中是毫秒级的，不必为整包词条
-    付一次模型往返。未命中再交给 VocabularyAgent（在线走模型，离线走分级词表）。
-    """
     if db is not None:
-        # 延迟导入：reading_service 会回到 agents，模块级导入会成环
         from app.services.reading_service import lemmatize
 
         cleaned = word.strip().lower()
@@ -132,10 +121,13 @@ def explain_word(
         entry = db.execute(
             select(Vocabulary).where(Vocabulary.word.in_(candidates))
         ).scalars().first()
-        if entry and (entry.meaning or entry.meaning_zh):
+        gloss = ""
+        if entry is not None:
+            gloss = (entry.meaning_zh or "").strip() or (entry.meaning or "").strip()
+        if gloss:
             meanings = [
                 part.strip()
-                for part in (entry.meaning or entry.meaning_zh).replace("；", ";").split(";")
+                for part in gloss.replace("；", ";").split(";")
                 if part.strip()
             ]
             return {
@@ -164,11 +156,6 @@ def analyze_sentence(
 
 
 def translate_text(text: str, provider: AIProvider | None = None) -> str:
-    """整句翻译。
-
-    比 analyze_sentence 轻得多：只问一句中文，不问主干、搭配、语法，
-    所以模型要生成的 token 少一个量级，点「翻译」不必再等十秒。
-    """
     return TranslationAgent(provider).translate(text)
 
 
@@ -178,18 +165,11 @@ def analyze_selection(
     cefr_level: str,
     provider: AIProvider | None = None,
 ) -> tuple[dict, bool]:
-    """精读划词：解析用户选中的词/短语，返回 (结果, 是否模型产出)。
-
-    前端据此渲染成一张可采纳的卡片；generated=False 表示这是离线兜底，
-    界面要提示用户"模型没调通"，别把空释义当成正式结果。
-    """
     analysis, from_model = WordPhraseAgent(provider).analyze_with_status(
         text, sentence, cefr_level
     )
     return analysis.model_dump(), from_model
 
-
-# ------------------------------------------------------------- 用户上传内容
 
 def _extract_text(filename: str, raw: bytes) -> str:
     suffix = Path(filename).suffix.lower()
@@ -200,17 +180,10 @@ def _extract_text(filename: str, raw: bytes) -> str:
     return raw.decode("utf-8", errors="ignore")
 
 
-# 含英文字母才算「有用的正文行」。
 _HAS_ENGLISH = re.compile(r"[A-Za-z]")
 
 
 def english_only(text: str) -> str:
-    """丢掉整行没有英文的内容。
-
-    精读只逐句解析英文，上传材料里的中文标题、中文译文段落不必进平台：
-    留着会占一个「句子」的位置，还要模型白跑一遍。行内夹着中文注解
-    （如 "microcosm (缩影)"）的英文句子仍保留，那是正文的一部分。
-    """
     lines = [line for line in text.splitlines() if _HAS_ENGLISH.search(line)]
     return "\n".join(lines).strip()
 
@@ -228,7 +201,6 @@ def _extract_pdf(raw: bytes) -> str:
 
 
 def _extract_docx(raw: bytes) -> str:
-    """docx 本质是 zip，直接读取 document.xml 里的文本，避免引入重型依赖。"""
     import io
     import zipfile
 
@@ -251,11 +223,6 @@ def create_user_content(
     raw: bytes | None = None,
     text: str = "",
 ) -> UserContent:
-    """保存用户内容：上传文件或直接粘贴文本，二选一。
-
-    纯文本没有文件，file_url 留空、content_type 记作 text，
-    阅读与逐句分析流程只依赖 content 字段，因此两者完全等价。
-    """
     body = text.strip()
     if body:
         if len(body.encode("utf-8")) > MAX_UPLOAD_BYTES:
@@ -275,7 +242,6 @@ def create_user_content(
         if not body:
             raise ValueError("无法从该文件中提取文本内容")
 
-    # 中文标题/译文段落不进平台，只留英文正文
     body = english_only(body)
     if not body:
         raise ValueError("没有检测到英文正文，精读只解析英文文章")

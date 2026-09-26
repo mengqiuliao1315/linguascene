@@ -1,10 +1,3 @@
-/**
- * 打卡热力图：一列一周，周一在最上，越活跃颜色越深。
- *
- * 月份标尺与格子共用同一套 CELL/GAP 尺寸，标签绝对定位到列左边缘，
- * 所以「5月」这类两字标签不会再换行挤压布局。
- */
-
 "use client";
 
 import { useState } from "react";
@@ -18,9 +11,9 @@ const MONTHS = [
   "7月", "8月", "9月", "10月", "11月", "12月",
 ];
 
-const CELL = 16; // 格子边长
-const GAP = 3; // 格子间距
-const STEP = CELL + GAP; // 相邻两列的左边缘距离
+const CELL = 16;
+const GAP = 3;
+const STEP = CELL + GAP;
 
 function formatDate(date: Date): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
@@ -48,7 +41,6 @@ export function Heatmap({
 }) {
   const byDate = new Map(cells.map((cell) => [cell.date, cell]));
 
-  // 悬停提示：记录日期与格子中心坐标，用 fixed 定位避免被滚动容器裁掉
   const [tip, setTip] = useState<{
     weekday: string;
     label: string;
@@ -59,7 +51,6 @@ export function Heatmap({
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // 让最后一列落在本周，第一列往前推 weeks-1 周
   const isoWeekday = (today.getDay() + 6) % 7;
   const lastMonday = new Date(today);
   lastMonday.setDate(today.getDate() - isoWeekday);
@@ -106,7 +97,6 @@ export function Heatmap({
     <div className="space-y-3">
       <div className="overflow-x-auto pb-1">
         <div className="flex gap-2">
-          {/* 星期标尺：与格子同为 CELL 高、GAP 间距，保证逐行对齐 */}
           <div className="flex shrink-0 flex-col" style={{ gap: GAP }}>
             <div style={{ height: CELL }} />
             {WEEKDAYS.map((day, index) => (
@@ -121,7 +111,6 @@ export function Heatmap({
           </div>
 
           <div className="flex min-w-0 flex-col" style={{ gap: GAP }}>
-            {/* 月份标尺：绝对定位到对应列，标签不换行、不撑宽布局 */}
             <div className="relative" style={{ height: CELL }}>
               {monthLabels.map((item) => (
                 <span

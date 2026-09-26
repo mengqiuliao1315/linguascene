@@ -1,10 +1,3 @@
-"""内置口语场景数据。
-
-seed.py 从这里读取写入数据库。task_key 在整个项目里必须唯一：
-离线提示（TASK_HINTS）、任务判定（TASK_INTENT_PATTERNS）、整句翻译
-（TASK_QUESTIONS / SENTENCE_ZH）都按 task_key 全局索引，重名会互相污染。
-"""
-
 SCENARIOS: list[dict] = [
     {
         "slug": "ordering-coffee",

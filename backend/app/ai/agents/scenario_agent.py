@@ -1,19 +1,3 @@
-"""场景对话 Agent。
-
-负责：扮演角色推进剧情、判定任务进度、给出纠错与地道表达。
-
-一次对话回复被拆成两路模型调用：
-
-- `reply_core`：只产出角色这一轮说的话，输出最短，用户最先看到；
-- `feedback`：纠错、地道表达、新词、点评、下一步提示，可以晚一点到。
-
-两路并行跑，谁先好谁先发（见 conversation_service.stream_message），
-所以「AI 说话」的等待时间只取决于短的那一路。原先把所有字段塞进一次调用，
-模型得把整包 JSON 写完才返回，回复也就被反馈一起拖住了。
-
-在线时由模型生成，离线时由规则引擎生成，两者共用同一套任务判定与反馈策略。
-"""
-
 import json
 import logging
 from collections.abc import Iterator
@@ -33,11 +17,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TurnPlan:
-    """一轮对话的进度账本。
-
-    任务判定全部走规则引擎，不依赖模型，保证进度真实可复现；模型只在这之上
-    补充「它认为完成了哪些」。
-    """
 
     pending_keys: list[str] = field(default_factory=list)
     """本轮开始前所有未完成的任务键。"""
@@ -61,7 +40,6 @@ class ScenarioAgent:
     def __init__(self, provider: AIProvider | None = None) -> None:
         self.provider = provider or get_provider()
 
-    # ------------------------------------------------------------ 任务判定
 
     def plan(
         self,
@@ -71,7 +49,6 @@ class ScenarioAgent:
         completed_tasks: set[str],
         task_progress: int = 0,
     ) -> TurnPlan:
-        """按规则算本轮的任务进度。不调用模型，零成本。"""
         tasks = scenario.tasks if scenario else []
         total_tasks = len(tasks)
         pending_keys = [t.task_key for t in tasks if t.task_key not in completed_tasks]
@@ -99,7 +76,6 @@ class ScenarioAgent:
             task_completed=task_completed,
         )
 
-    # ------------------------------------------------------- 第一路：回复
 
     def _reply_system_prompt(
         self, scenario: Scenario | None, cefr_level: str, plan: TurnPlan
@@ -127,11 +103,6 @@ class ScenarioAgent:
         cefr_level: str,
         plan: TurnPlan,
     ) -> str:
-        """只产出角色这一轮说的话。模型不可用时退回规则引擎。
-
-        走纯文本补全而非 JSON：不带 response_format、不做 JSON 解析，
-        模型直接输出角色台词，比 JSON 模式快 20~30%。
-        """
         if not self.provider.is_mock:
             try:
                 system = self._reply_system_prompt(scenario, cefr_level, plan)
@@ -163,12 +134,6 @@ class ScenarioAgent:
         cefr_level: str,
         plan: TurnPlan,
     ) -> Iterator[str]:
-        """流式产出角色台词，逐块 yield。
-
-        比 reply_core 更快体感：首 token 到达就往前端推，用户不必等整句
-        生成完才看到 AI 开口。模型不可用或流式失败时退回 reply_core
-        一次性返回（仍 yield 一次，调用方无感知差异）。
-        """
         if not self.provider.is_mock:
             try:
                 system = self._reply_system_prompt(scenario, cefr_level, plan)
@@ -181,7 +146,6 @@ class ScenarioAgent:
             except (AIProviderError, ValueError) as exc:
                 logger.warning("ScenarioAgent 流式回复失败，降级：%s", exc)
 
-        # 离线或流式失败：一次性返回
         yield self._offline_reply(
             scenario=scenario,
             user_message=user_message,
@@ -191,7 +155,6 @@ class ScenarioAgent:
             history=history,
         )
 
-    # ------------------------------------------------------- 第二路：反馈
 
     def feedback(
         self,
@@ -203,11 +166,6 @@ class ScenarioAgent:
         plan: TurnPlan,
         suggested_expressions: set[str] | None = None,
     ) -> dict:
-        """纠错、地道表达、新词、点评、下一步提示。
-
-        API 不可用（离线模式）时，不生成任何点评——规则引擎的纠错和点评
-        太粗糙，给用户看反而误导。只保留任务提示（纯规则、可靠）和进度。
-        """
         correction = None
         natural = None
         vocabulary: list[dict] = []
@@ -260,9 +218,6 @@ class ScenarioAgent:
             except (AIProviderError, ValueError) as exc:
                 logger.warning("ScenarioAgent 反馈生成失败，降级到规则引擎：%s", exc)
 
-        # 离线模式：API 不可用时不给点评。
-        # 规则引擎的纠错和点评质量不够，给用户看反而误导——
-        # 不如不给，让用户专注对话本身。任务提示仍保留（纯规则、可靠）。
         if self.provider.is_mock:
             return {
                 "correction": None,
@@ -273,6 +228,9 @@ class ScenarioAgent:
                 "completed_task_keys": [],
             }
 
+        if correction is None:
+            correction = rule_engine.detect_correction(user_message)
+
         return {
             "correction": correction,
             "natural_expression": natural,
@@ -282,7 +240,6 @@ class ScenarioAgent:
             "completed_task_keys": model_completed,
         }
 
-    # ---------------------------------------------------- 一次拿全（兼容）
 
     def reply(
         self,
@@ -296,11 +253,6 @@ class ScenarioAgent:
         task_progress: int,
         suggested_expressions: set[str] | None = None,
     ) -> ScenarioReply:
-        """两路合并成一次返回。
-
-        流式端点已经改成分别调用 reply_core / feedback；这里保留给一次性
-        端点与测试使用，行为与拆分前一致。
-        """
         plan = self.plan(
             scenario=scenario,
             user_message=user_message,
@@ -335,7 +287,6 @@ class ScenarioAgent:
             task_completed=plan.task_completed,
         )
 
-    # ------------------------------------------------------------- 工具
 
     def _task_lines(self, scenario: Scenario | None) -> str:
         if not scenario:
@@ -350,11 +301,6 @@ class ScenarioAgent:
         scenario: Scenario | None,
         model_hint=None,
     ) -> dict | None:
-        """给下一个未完成任务配一条中文提示。
-
-        任务键由本地任务列表决定，不采信模型的 task_key，避免提示跑偏；
-        模型只负责把 idea/suggested 写得更贴合当前对话，缺失时回退静态表。
-        """
         if not next_key:
             return None
 
@@ -367,9 +313,6 @@ class ScenarioAgent:
 
         if model_hint and model_hint.suggested_en:
             data = model_hint.model_dump()
-            # task_key 与 task_description 一律以本地任务表为准。模型有时会
-            # 自行判断进度、把下一步的任务名写进 task_description，导致提示卡
-            # 的标题（本地任务）和描述（模型的猜测）对不上。
             data["task_key"] = next_key
             data["task_description"] = description
             return data
@@ -398,7 +341,6 @@ class ScenarioAgent:
         all_completed: set[str],
         history: list[dict],
     ) -> str:
-        """离线模式回复：围绕下一个未完成任务提问，保持角色语气。"""
         if scenario and scenario.tasks:
             task_map = {t.task_key: t for t in scenario.tasks}
             if pending_keys:
@@ -407,20 +349,16 @@ class ScenarioAgent:
                 if newly_completed:
                     return f"Got it. {question}"
                 return question
-            # 全部完成
             return self._closing_line(scenario.slug)
 
-        # 自由对话：基于用户输入做承接式追问，不编造内容
         return self._free_talk_reply(user_message, history)
 
     def _task_question(self, task_key: str) -> str:
-        """按任务键取固定提问。内容模块是唯一来源，未知键回退到通用追问。"""
         return rule_engine.TASK_QUESTIONS.get(
             task_key, "Could you tell me more about that?"
         )
 
     def _closing_line(self, slug: str) -> str:
-        """全部任务完成后的收尾语，按场景给一句符合角色身份的话。"""
         closings = {
             "ordering-coffee": "Perfect, your order is all set. Here you go — enjoy your drink!",
             "airport-check-in": "You're all checked in. Here's your boarding pass. Have a good flight!",
@@ -438,7 +376,6 @@ class ScenarioAgent:
         return closings.get(slug, "Great, that's everything. Well done!")
 
     def _free_talk_reply(self, user_message: str, history: list[dict]) -> str:
-        """自由对话：用开放性问题承接，不做语义臆测。"""
         turn = len([m for m in history if m["role"] == "user"])
         prompts = [
             "That's interesting. Could you tell me more about that?",

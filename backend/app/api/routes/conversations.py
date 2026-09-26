@@ -59,8 +59,6 @@ def start_scenario(
     if not scenario:
         raise HTTPException(status_code=404, detail="场景不存在")
 
-    # 用户在「继续 / 重新开始」里选了重新开始：旧记录被这一次顶掉，
-    # 历史里同一个场景始终只剩一条。
     if restart:
         conversation_service.clear_scene_conversations(
             db, user, scenario_id=scenario.id
@@ -83,7 +81,6 @@ def start_free_talk(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    # 自由对话同样只保留一条：重新开始就把上一次的覆盖掉。
     if restart:
         conversation_service.clear_scene_conversations(db, user, scenario_id=None)
 
@@ -99,33 +96,20 @@ def start_free_talk(
 
 
 def _best_progress(conversation: Conversation) -> int:
-    """历史最高完成度：完成过的对话固定算 100%，重练不会把它拉低。"""
     return 100 if conversation.is_completed else conversation.task_progress
 
 
 PREVIEW_LIMIT = 40
 
-# 自由对话在历史里也算一个"场景"，用它当分组键与 scenario_id（int）区分开
 FREE_TALK_KEY = "free_talk"
 
 
 def _preview(text: str) -> str:
-    """取用户说的第一句话当预览。
-
-    自由对话的标题一律是 "Free Talk"，光看标题和时间分不清哪一次聊的是什么，
-    所以列表里要带上一句内容，用户才挑得动「继续哪一次」。
-    """
     collapsed = " ".join(text.split())
     return collapsed if len(collapsed) <= PREVIEW_LIMIT else f"{collapsed[:PREVIEW_LIMIT]}…"
 
 
 def _activity_stats(db: Session, conversation_ids: list[int]) -> tuple[dict[int, datetime], dict[int, str]]:
-    """一次取回这批对话的「最后一条消息时间」与「首条用户消息预览」。
-
-    首条/末条都按 min/max(id) 定位而不是 min/max(created_at)：同一轮插入的
-    消息时间戳可能撞在一起，而 id 是自增的，先后永远可靠。三次查询，与对话
-    数量无关。
-    """
     last_ids = dict(
         db.execute(
             select(Message.conversation_id, func.max(Message.id))
@@ -186,7 +170,6 @@ def list_conversations(
     last_at, previews = _activity_stats(db, [c.id for c in rows])
 
     def activity(conversation: Conversation) -> datetime:
-        """最后对话时间：没有消息（理论上不会）就退回开始时间。"""
         return last_at.get(conversation.id) or conversation.started_at
 
     def entry(
@@ -216,13 +199,6 @@ def list_conversations(
             "preview": preview,
         }
 
-    # 场景对话按模块去重：同一个场景只留一行。代表取「最近一次对话」那一条，
-    # 点进去就是接着上次聊，而不是被很久以前那条高进度记录挡住；进度与 XP 仍按
-    # 历史最高返回（列表已经不显示进度了，但字段保留），完成标记取组内是否完成过。
-    #
-    # 自由对话同样只留一行：「继续 / 重新开始」是同一个入口，一个新开的 Free Talk
-    # 会顶掉上一次，所以它也算一个"场景"。代表取最近一次，进度与 XP 就用这一条
-    # 自己的——它们是同一次聊天，取历史最高会把不同话题的成绩混在一起。
     groups: dict[int | str, list[Conversation]] = {}
     merged: list[dict] = []
     for conversation in rows:
@@ -343,16 +319,10 @@ def send_message(
 
 
 def _sse(event: str, data: dict) -> str:
-    """拼一个 SSE 帧。
-
-    `default=str` 兜住 datetime 这类不能直接 JSON 化的值：`_message_payload`
-    会把消息行的 `created_at` 原样带出来。
-    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
 def _turn_payload(payload: dict) -> dict:
-    """把 payload 里的消息行换成前端要的扁平结构。"""
     return {
         key: (_message_payload(value) if isinstance(value, Message) else value)
         for key, value in payload.items()
@@ -362,11 +332,6 @@ def _turn_payload(payload: dict) -> dict:
 def _turn_events(
     user_id: int, conversation_id: int, text: str, provider
 ) -> Iterator[str]:
-    """一轮对话的 SSE 帧。
-
-    生成器跑在 Starlette 的线程池里，和请求不在同一线程，所以自己开一个
-    Session——请求那条会话在响应开始时就随依赖注入还回去了。
-    """
     db = SessionLocal()
     try:
         user = db.get(User, user_id)
@@ -418,7 +383,6 @@ def stream_message(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
-            # 关掉 nginx 一类反向代理的缓冲，否则帧会被攒起来一次性发
             "X-Accel-Buffering": "no",
         },
     )

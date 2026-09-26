@@ -1,7 +1,3 @@
-/**
- * 首页：问候 + 等级、今日任务、每日计划（可编辑）、打卡图、推荐。
- */
-
 "use client";
 
 import Link from "next/link";
@@ -25,7 +21,6 @@ import { RequireAuth } from "@/lib/auth";
 import { socialApi, type Heatmap as Heat } from "@/lib/social";
 import type { Dashboard } from "@/lib/types";
 
-/** 按本机当前小时算问候语，页面开着也会随时间自动切换。 */
 function greetingFor(hour: number): string {
   if (hour < 5) return "Good night";
   if (hour < 12) return "Good morning";

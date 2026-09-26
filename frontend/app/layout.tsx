@@ -19,11 +19,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // suppressHydrationWarning：下面的脚本会在 React 接管前给 <html> 挂
-    // data-theme，属性对不上会被当成水合不一致，这里明确放行。
+
     <html lang="zh-CN" suppressHydrationWarning>
       <body>
-        {/* 先上色再渲染，避免刷新时闪一下默认皮肤 */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
         <AuthProvider>
           {children}

@@ -1,8 +1,3 @@
-/**
- * 后端 API 客户端。
- *
- * Token 保存在 localStorage，仅用于身份认证；模型 API Key 始终只存在于后端。
- */
 import type {
   Achievement,
   AdminUser,
@@ -24,7 +19,6 @@ import type {
   CreatedCredentials,
   Dashboard,
   GamificationProfile,
-  LeaderboardEntry,
   Report,
   Scenario,
   SentenceAnalysis,
@@ -35,18 +29,12 @@ import type {
   WordExplanation,
 } from "./types";
 
-// 默认走同源 /api（由 next.config.mjs 代理到后端），避免跨域问题。
-// 如需直连后端，设置 NEXT_PUBLIC_API_BASE。
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+
+export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const TOKEN_KEY = "linguascene_token";
 
-/**
- * 语音识别通道：用户自己的模型 / 服务端本地识别。
- *
- * 曾经还有第三条「浏览器识别」（Web Speech API），已按产品要求删除——它在
- * 内嵌 webview 里连不上浏览器厂商的识别服务，识别质量也差。
- */
 export type VoiceEngine = "model" | "local";
 
 export function getToken(): string | null {
@@ -71,15 +59,14 @@ export class ApiError extends Error {
   }
 }
 
-/** 确认未授权时清掉本地令牌并回到登录页；其它状态码原样交给调用方。 */
 export function handleUnauthorized(status: number): boolean {
   if (status !== 401) return false;
   clearToken();
   if (
     typeof window !== "undefined" &&
-    !window.location.pathname.startsWith("/login")
+    !window.location.pathname.startsWith(`${BASE_PATH}/login`)
   ) {
-    window.location.href = "/login";
+    window.location.href = `${BASE_PATH}/login`;
   }
   return true;
 }
@@ -101,17 +88,19 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     throw new ApiError(0, "无法连接后端服务");
   }
 
-  if (handleUnauthorized(response.status)) {
+  if (token && handleUnauthorized(response.status)) {
     throw new ApiError(401, "登录已过期");
   }
 
   if (!response.ok) {
-    let detail = "请求失败";
+    let detail = `请求失败（HTTP ${response.status}）`;
     try {
       const body = await response.json();
-      detail = body.detail ?? detail;
+      if (typeof body.detail === "string" && body.detail.trim()) {
+        detail = body.detail;
+      }
     } catch {
-      // 响应不是 JSON，保留默认文案
+
     }
     throw new ApiError(response.status, detail);
   }
@@ -129,11 +118,10 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  authConfig: () =>
-    request<{ allow_public_registration: boolean }>("/api/auth/config"),
-
-  // ---------------------------------------------------------------- 管理员
   adminUsers: () => request<AdminUser[]>("/api/admin/users"),
+
+  adminCredentials: (id: number) =>
+    request<CreatedCredentials>(`/api/admin/users/${id}/credentials`),
 
   adminCreateUser: (payload: {
     username: string;
@@ -180,7 +168,6 @@ export const api = {
   adminDeleteUser: (id: number) =>
     request<void>(`/api/admin/users/${id}`, { method: "DELETE" }),
 
-  // ------------------------------------------------------------ 我的 AI 模型
   aiStatus: () => request<AiStatus>("/api/ai-settings"),
 
   createAiConfig: (payload: AiProviderConfigInput) =>
@@ -215,9 +202,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-
-  // ------------------------------------------------------------ 模型分享
-  aiShares: () => request<AiShareList>("/api/ai-shares"),
 
   createAiShare: (payload: AiShareInput) =>
     request<AiShare>("/api/ai-shares", {
@@ -259,7 +243,7 @@ export const api = {
   updateMe: (
     payload: Partial<Pick<User, "cefr_level" | "theme">> & {
       interests?: string[];
-      // 改用户名/邮箱属于换登录凭据，必须同时带上当前密码
+
       username?: string;
       email?: string;
       current_password?: string;
@@ -297,17 +281,12 @@ export const api = {
 
   scenario: (id: number) => request<Scenario>(`/api/scenarios/${id}`),
 
-  /**
-   * 开始场景对话。`restart=true` 表示用户选了「重新开始」，后端会先把该场景
-   * 的旧记录清掉再建新的，历史里同一场景始终只剩一条。
-   */
   startScenario: (id: number, restart = false) =>
     request<Conversation>(
       `/api/scenarios/${id}/start${restart ? "?restart=true" : ""}`,
       { method: "POST" }
     ),
 
-  /** 开始自由对话；`restart=true` 的语义同上，覆盖上一次的 Free Talk。 */
   startFreeTalk: (restart = false) =>
     request<Conversation>(
       `/api/conversations/free-talk/start${restart ? "?restart=true" : ""}`,
@@ -358,7 +337,6 @@ export const api = {
       body: JSON.stringify({ sentence, context }),
     }),
 
-  /** 上传文件或粘贴文本，二者至少提供一个。 */
   uploadContent: (file: File | null, title: string, text = "") => {
     const form = new FormData();
     form.append("title", title);
@@ -380,13 +358,6 @@ export const api = {
       method: "POST",
     }),
 
-  vocabulary: (dueOnly = false) =>
-    request<VocabularyEntry[]>(
-      `/api/vocabulary${dueOnly ? "?due_only=true" : ""}`
-    ),
-
-  reviewToday: () => request<VocabularyEntry[]>("/api/vocabulary/review-today"),
-
   saveWord: (payload: {
     word: string;
     meaning?: string;
@@ -400,17 +371,6 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  reviewWord: (id: number, quality: number) =>
-    request<{ word: string; mastery: number; next_review: string }>(
-      `/api/vocabulary/${id}/review`,
-      { method: "POST", body: JSON.stringify({ quality }) }
-    ),
-
-  deleteWord: (id: number) =>
-    request<void>(`/api/vocabulary/${id}`, { method: "DELETE" }),
-
-  // ---------------------------------------------------------------- 语音
-  /** 语音输入能力：用户自己的模型能不能转写、还有哪些备选通道。 */
   audioStt: () =>
     request<{
       available: boolean;
@@ -421,13 +381,6 @@ export const api = {
       engines: { id: VoiceEngine; label: string; detail: string }[];
     }>("/api/audio/stt"),
 
-  /**
-   * 上传一段录音换文本。
-   *
-   * engine 是用户选定的通道：`local` 走服务端本地识别（界面默认这条，不连任何
-   * API、不需要 Key），`model` 走他在 AI 模型页配的那家。后端不会替用户换通道
-   * ——走不通时返回 503/502，由界面弹窗让用户自己决定。
-   */
   transcribe: (
     blob: Blob,
     filename: string,
@@ -446,9 +399,6 @@ export const api = {
 
   gamificationProfile: () =>
     request<GamificationProfile>("/api/gamification/profile"),
-
-  leaderboard: () =>
-    request<LeaderboardEntry[]>("/api/gamification/leaderboard"),
 
   achievements: () => request<Achievement[]>("/api/gamification/achievements"),
 

@@ -22,7 +22,6 @@ import type {
 const LEVELS: CefrLevel[] = ["A1", "A2", "B1", "B2", "C1"];
 const INTERESTS = ["Daily Life", "Travel", "Workplace", "Technology", "Culture"];
 
-/** 头像与改密码：与个人主页数据无关，单独放在一张卡里。 */
 function AccountCard() {
   const { user, setUser } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -36,7 +35,6 @@ function AccountCard() {
   const [pwError, setPwError] = useState("");
   const [pwNotice, setPwNotice] = useState("");
 
-  // 账号标识（用户名/邮箱）可自助修改，但改之前要验一次当前密码
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [identityPassword, setIdentityPassword] = useState("");
@@ -44,8 +42,6 @@ function AccountCard() {
   const [identityError, setIdentityError] = useState("");
   const [identityNotice, setIdentityNotice] = useState("");
 
-  // 只在用户名/邮箱本身变化时回填，避免改头像、换主题等 setUser 把用户
-  // 正在输入的内容冲掉
   useEffect(() => {
     if (!user) return;
     setUsername(user.username);
@@ -96,7 +92,7 @@ function AccountCard() {
       setAvatarError(err instanceof Error ? err.message : "上传失败");
     } finally {
       setUploading(false);
-      // 清空 input，否则同一张图再选一次不会触发 change
+
       if (fileRef.current) fileRef.current.value = "";
     }
   }
@@ -480,7 +476,7 @@ function ProfileView() {
                   {item.unlocked_at ? formatDay(item.unlocked_at) : "已解锁"}
                 </span>
               ) : (
-                // 未解锁也要看得见「还差多少」，否则整片灰格子像是功能没生效
+
                 <div className="w-full space-y-1">
                   <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
                     <div

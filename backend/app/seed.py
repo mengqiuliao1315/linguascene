@@ -1,8 +1,3 @@
-"""写入内置场景、文章、成就与演示账号。
-
-可重复执行：已存在的数据会跳过，不会重复插入。
-"""
-
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -10,7 +5,6 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import SessionLocal, engine
-from app.core.db_migrate import migrate_legacy_ai_config
 from app.core.schema_sync import apply_schema
 from app.core.security import apply_password
 from app.data.reading_content import build_sentences
@@ -137,9 +131,7 @@ VOCABULARY: list[dict] = [
 
 
 def seed() -> None:
-    """写入全部种子数据（幂等）。"""
     apply_schema(engine)
-    migrate_legacy_ai_config(engine)
     db = SessionLocal()
     try:
         _seed_scenarios(db)
@@ -151,17 +143,11 @@ def seed() -> None:
     finally:
         db.close()
 
-    # 词书数据量大，单独一个会话写入，避免与上面的种子数据混在同一事务里
     wordbook_result = wordbook_seed.seed_wordbooks()
     print("词书导入：", wordbook_result)
     print("种子数据写入完成。")
 
 def _seed_scenarios(db) -> None:
-    """写入或更新内置场景。
-
-    场景文案会随版本迭代（加任务、改时长），所以已存在的场景不是跳过，
-    而是就地更新；任务按 task_key 对齐，保证老对话里已完成的任务键依然有效。
-    """
     for item in SCENARIOS:
         scenario = db.execute(
             select(Scenario).where(Scenario.slug == item["slug"])
@@ -191,7 +177,6 @@ def _seed_scenarios(db) -> None:
 
 
 def _sync_tasks(db, scenario: Scenario, tasks: list[tuple]) -> None:
-    """把场景的任务对齐到给定列表：新增、更新、删除多余项。"""
     existing = {t.task_key: t for t in scenario.tasks}
     wanted = {key for key, _, _ in tasks}
 
@@ -224,8 +209,6 @@ def _seed_articles(db) -> None:
             select(Article).where(Article.title == item["title"])
         ).scalar_one_or_none()
         if existing:
-            # 正文或内置讲解改了要能生效：老库里的文章不再跳过，
-            # 就地更新正文并补上逐句讲解（讲解只认内置数据，不调模型）。
             article = existing
             article.content = item["content"]
             article.level = item["level"]
@@ -256,8 +239,6 @@ def _seed_articles(db) -> None:
     db.flush()
 
 
-# 与 article_agent 的离线分析保持一致：预置分析记录也要带阅读问题，
-# 否则「开始分析」命中 article.analysis 直接返回时，问题列表是空的。
 _BUILTIN_READING_QUESTIONS = [
     "What is the main idea of this text?",
     "Which detail best supports the main idea?",
@@ -266,11 +247,6 @@ _BUILTIN_READING_QUESTIONS = [
 
 
 def _seed_article_analysis(db, article: Article) -> None:
-    """写入平台文章的内置逐句讲解。
-
-    内容随文章一起维护，写入 ArticleAnalysis.sentences_json 后用户打开
-    即命中缓存，不需要模型。没有内置讲解的文章跳过。
-    """
     segments = split_sentences(article.content)
     sentences = build_sentences(article.title, segments)
     if not sentences:
@@ -288,7 +264,6 @@ def _seed_article_analysis(db, article: Article) -> None:
         db.add(article.analysis)
         db.flush()
     elif not json.loads(article.analysis.questions_json or "[]"):
-        # 老库里的预置记录只有 level/summary，补上问题列表
         article.analysis.questions_json = json.dumps(
             _BUILTIN_READING_QUESTIONS, ensure_ascii=False
         )
@@ -316,7 +291,6 @@ def _seed_achievements(db) -> None:
 
 
 def _seed_demo_user(db) -> None:
-    """内部站点：写入初始管理员账号，账号由管理员在后台分发给使用者。"""
     email = settings.admin_email
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if existing:

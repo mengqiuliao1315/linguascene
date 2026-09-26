@@ -1,11 +1,3 @@
-/**
- * 帖子正文渲染。
- *
- * 只支持受控的 Markdown 子集：# 标题、**加粗**、*斜体*、`代码`、
- * 链接、图片、有序/无序列表、引用、分隔线、段落。
- * 先转义 HTML 再生成标签，避免正文里注入脚本。
- */
-
 "use client";
 
 import { useMemo, type ReactNode } from "react";
@@ -18,11 +10,10 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** 只允许 http/https 链接与站内相对路径，挡掉 javascript: 之类的伪协议。 */
 function safeUrl(raw: string): string | null {
   const url = raw.trim();
   if (/^https?:\/\//i.test(url)) return url;
-  // 站内资源（头像、论坛配图）是 /api/... 形式；//host 这种协议相对地址不放行
+
   if (/^\/(?!\/)/.test(url)) return url;
   return null;
 }
@@ -30,12 +21,10 @@ function safeUrl(raw: string): string | null {
 function inline(text: string): string {
   let html = escapeHtml(text);
 
-  // 行内代码优先，避免其中的 * 被当成强调
   html = html.replace(/`([^`]+)`/g, (_m, code) => `<code>${code}</code>`);
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
 
-  // 图片要在链接之前处理
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
     const href = safeUrl(url);
     if (!href) return match;
@@ -84,7 +73,7 @@ export function Markdown({ content }: { content: string }): ReactNode {
       if (heading) {
         flushParagraph();
         closeList();
-        const level = heading[1].length + 1; // h2 ~ h4，页面里已有 h1
+        const level = heading[1].length + 1;
         out.push(`<h${level}>${inline(heading[2])}</h${level}>`);
         continue;
       }

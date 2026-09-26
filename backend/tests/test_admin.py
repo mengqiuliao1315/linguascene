@@ -1,13 +1,7 @@
-"""管理员账号管理接口。
-
-内部站点不开放注册，账号统一由管理员创建、分发。
-"""
-
 import pytest
 
 
 def test_non_admin_cannot_access_admin_api(auth_client):
-    """普通用户访问后台接口应被拒绝。"""
     assert auth_client.get("/api/admin/users").status_code == 403
 
 
@@ -32,7 +26,6 @@ def test_admin_creates_user_and_new_user_can_login(admin_client):
     assert response.status_code == 201
     created = response.json()
     assert created["username"] == "student1"
-    # 明文密码只在创建时返回一次，供管理员分发给使用者
     assert created["password"] == "student12345"
 
     login = admin_client.post(
@@ -88,7 +81,6 @@ def test_admin_reset_password(admin_client):
     )
     assert response.status_code == 200
 
-    # 旧密码失效，新密码可用
     assert (
         admin_client.post(
             "/api/auth/login",
@@ -106,7 +98,6 @@ def test_admin_reset_password(admin_client):
 
 
 def test_admin_list_does_not_return_password(admin_client):
-    """列表只在创建/重置时给一次明文，日常列表不再回读密码。"""
     created = admin_client.post(
         "/api/admin/users",
         json={
@@ -142,7 +133,6 @@ def test_admin_reset_returns_password_once(admin_client):
 
 
 def test_admin_sees_identifier_and_password_changes_from_user(admin_client):
-    """用户自助改用户名/邮箱/密码后，管理员列表要实时反映最新值。"""
     created = admin_client.post(
         "/api/admin/users",
         json={
@@ -191,7 +181,6 @@ def test_admin_sees_identifier_and_password_changes_from_user(admin_client):
 
 
 def test_admin_can_edit_identifiers_via_patch(admin_client):
-    """管理员也能改用户名与邮箱，并且新邮箱能登录。"""
     created = admin_client.post(
         "/api/admin/users",
         json={
@@ -244,7 +233,6 @@ def test_admin_edit_identifier_rejects_duplicate(admin_client):
 
 
 def test_password_updated_at_tracks_changes(admin_client):
-    """密码变更时间要跟着改密码走。"""
     created = admin_client.post(
         "/api/admin/users",
         json={
@@ -285,7 +273,6 @@ def test_admin_can_edit_password_via_patch(admin_client):
     assert "password" not in body
     assert body["cefr_level"] == "C1"
 
-    # 新密码确实生效
     assert (
         admin_client.post(
             "/api/auth/login",
@@ -345,7 +332,6 @@ def test_admin_deletes_user_and_its_data(admin_client):
     emails = [u["email"] for u in admin_client.get("/api/admin/users").json()]
     assert "deleteme@example.com" not in emails
 
-    # 被删除的账号无法再登录
     assert (
         admin_client.post(
             "/api/auth/login",
@@ -356,11 +342,6 @@ def test_admin_deletes_user_and_its_data(admin_client):
 
 
 def test_registration_returns_403_when_disabled(client, monkeypatch):
-    """关闭注册开关时，自助注册返回 403。
-
-    直接修改路由模块引用的 settings 字段，并先断言改动确实生效，
-    避免把"开关没生效"误判成"守卫失效"。
-    """
     from app.api.routes import auth as auth_route
 
     monkeypatch.setattr(auth_route.settings, "allow_public_registration", False)
@@ -378,7 +359,6 @@ def test_registration_returns_403_when_disabled(client, monkeypatch):
 
 
 def test_registration_default_is_closed():
-    """代码中的默认值必须是关闭，避免部署时忘记配置。"""
     from app.core.config import Settings
 
     assert Settings.model_fields["allow_public_registration"].default is False

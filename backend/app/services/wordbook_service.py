@@ -1,9 +1,8 @@
-"""词书 / 单词卡 / 每日任务 / 贡献值 / 排行榜 业务逻辑。"""
 from __future__ import annotations
 
 import json
 import random
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -27,7 +26,6 @@ XP_RULES = {
     "scenario_complete": 30,
     "article_read": 15,
     "reading_complete": 20,
-    # 今日任务的三个子项各自完成时各发一次，见 settle_daily_task。
     "daily_task_item": 10,
 }
 
@@ -43,10 +41,9 @@ OVERACHIEVE_STEP = 0.25
 OVERACHIEVE_XP = 15
 OVERACHIEVE_CAP = 60
 
-# 复习间隔（天）：答对一次前进一档，答错退回第一档。
-REVIEW_STAGES = (1, 2, 4, 7, 15, 30, 60)
+# 每次「记住了」提升的掌握度，三次即可把单词背出词书
+MASTERY_STEP = 1 / 3
 
-STUDY_MODES = ("new", "review")
 STUDY_ACTIONS = ("forget", "remember", "mastered")
 
 
@@ -58,13 +55,12 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def award_xp(db: Session, user: User, amount: int, source: str) -> int:
+def award_xp(db: Session, user: User, amount: int, source: str, ref: str = "") -> int:
     amount = int(amount)
     if amount <= 0:
         return 0
-    db.add(XpRecord(user_id=user.id, amount=amount, source=source))
+    db.add(XpRecord(user_id=user.id, amount=amount, source=source, ref=ref))
     user.xp = (user.xp or 0) + amount
-    # 拿到经验就算当天有学习行为，热力图与连续打卡天数据此累计。
     gamification_service.touch_streak(db, user)
     return amount
 
@@ -91,7 +87,6 @@ def award_contribution(
             note=note,
         )
     )
-    # 发布内容同样算当天学习，发帖/评论/上传文章都走这里。
     gamification_service.touch_streak(db, user)
     return amount
 
@@ -104,11 +99,6 @@ def award_publish_once(
     amount: int,
     reason: str = "publish_content",
 ) -> int:
-    """同一份内容只记一次贡献值。
-
-    上传接口和「公布给大家」都会走到这里，同一个人对同一份内容
-    反复公布不该反复加分。
-    """
     existed = db.scalar(
         select(func.count(ContributionRecord.id)).where(
             ContributionRecord.user_id == user.id,
@@ -141,18 +131,13 @@ def get_or_create_daily_task(db: Session, user: User, task_date: str | None = No
         return task
 
     lvl = max(1, user.level or 1)
-    target_new = min(10 + (lvl - 1) * 2, 40)
-    target_review = min(20 + (lvl - 1) * 5, 120)
     task = DailyTask(
         user_id=user.id,
         task_date=task_date,
-        # 背单词总目标 = 新学 + 复习，今日任务的「背单词」子项按这个总数结算
-        target_words=target_new + target_review,
+        target_words=min(30 + (lvl - 1) * 7, 160),
         target_scenarios=1 if lvl < 5 else 2,
         target_articles=1,
         target_minutes=min(15 + (lvl - 1) * 2, 45),
-        target_new_words=target_new,
-        target_review_words=target_review,
     )
     db.add(task)
     db.flush()
@@ -178,7 +163,6 @@ def _item_ratios(task: DailyTask) -> list[float]:
 
 
 def _completion_ratio(task: DailyTask) -> float:
-    """完成判定用最短板：三个子项都达标才算今日任务完成。"""
     ratios = _item_ratios(task)
     if not ratios:
         return 0.0
@@ -186,11 +170,11 @@ def _completion_ratio(task: DailyTask) -> float:
 
 
 def _progress_ratio(task: DailyTask) -> float:
-    """进度条用平均值：否则某项为 0 时条子会一直空着，看起来像坏了。"""
     ratios = _item_ratios(task)
     if not ratios:
         return 0.0
-    return sum(ratios) / len(ratios)
+    # 单项超额不抬高整体进度，只有全部目标达成才到 100%
+    return sum(min(1.0, ratio) for ratio in ratios) / len(ratios)
 
 
 def _overachievement(task: DailyTask) -> float:
@@ -198,12 +182,6 @@ def _overachievement(task: DailyTask) -> float:
 
 
 def settle_daily_task(db: Session, task: DailyTask) -> DailyTask:
-    """结算每日任务：三个子项各自完成时各发 10 XP，超额奖励随进度补差。
-
-    子项经验各自走一次性开关，重复调用安全。超额奖励不能在「刚完成」那一刻算——
-    那时 done 恰好等于 target，超额比例必然是 0，之后再学也不会有奖励。所以这里
-    把子项完成和超额分开：前者按开关发，后者按当前完成度重算并只补发差额。
-    """
     user = _user_of(db, task.user_id)
 
     for done, target, flag in (
@@ -239,8 +217,8 @@ def record_activity(
     amount: int = 1,
     xp: int | None = None,
     source: str | None = None,
+    ref: str = "",
 ) -> dict:
-    """记录一次学习行为：累加每日任务进度 + 发经验。"""
     task = get_or_create_daily_task(db, user)
 
     if kind == "word":
@@ -254,7 +232,7 @@ def record_activity(
 
     gained = 0
     if xp:
-        gained = award_xp(db, user, xp * amount, source or kind)
+        gained = award_xp(db, user, xp * amount, source or kind, ref=ref)
 
     db.flush()
     settle_daily_task(db, task)
@@ -262,11 +240,8 @@ def record_activity(
     return {"xp_gained": gained, "task": serialize_daily_task(task)}
 
 
-def record_reading(db: Session, user: User) -> bool:
-    """打开一篇材料就算读过：每天只计一次，计入「读文章」并发经验。
-
-    没有这层幂等，一天里反复打开同一篇材料会把每日任务的篇数灌满。
-    """
+def record_reading(db: Session, user: User, *, kind: str, material_id: int) -> bool:
+    ref = f"{kind}:{material_id}"
     day_start = datetime.combine(
         _now().date(), datetime.min.time(), tzinfo=timezone.utc
     )
@@ -274,6 +249,7 @@ def record_reading(db: Session, user: User) -> bool:
         select(func.count(XpRecord.id)).where(
             XpRecord.user_id == user.id,
             XpRecord.source == "article",
+            XpRecord.ref == ref,
             XpRecord.created_at >= day_start,
         )
     )
@@ -281,7 +257,13 @@ def record_reading(db: Session, user: User) -> bool:
         return False
 
     record_activity(
-        db, user, "article", 1, xp=XP_RULES["article_read"], source="article"
+        db,
+        user,
+        "article",
+        1,
+        xp=XP_RULES["article_read"],
+        source="article",
+        ref=ref,
     )
     return True
 
@@ -291,16 +273,12 @@ def serialize_daily_task(task: DailyTask) -> dict:
         "date": task.task_date,
         "targets": {
             "words": task.target_words,
-            "new_words": task.target_new_words,
-            "review_words": task.target_review_words,
             "scenarios": task.target_scenarios,
             "articles": task.target_articles,
             "minutes": task.target_minutes,
         },
         "done": {
             "words": task.done_words,
-            "new_words": task.done_new_words,
-            "review_words": task.done_review_words,
             "scenarios": task.done_scenarios,
             "articles": task.done_articles,
             "minutes": task.done_minutes,
@@ -432,7 +410,6 @@ def list_words(
     if only_my:
         stmt = stmt.join(UserVocabulary, UserVocabulary.vocabulary_id == Vocabulary.id).where(
             UserVocabulary.user_id == (user.id if user else -1),
-            # 「我的单词本」只算真正收进来的词，删除后 in_vocabulary 置 false 就不再出现
             UserVocabulary.in_vocabulary.is_(True),
         )
 
@@ -453,12 +430,10 @@ def list_words(
 
 
 def my_words_count(db: Session, user: User) -> int:
-    """我的单词本里的单词总数。"""
     return _count(db, _my_words_stmt(user))
 
 
 def _my_words_stmt(user: User):
-    """用户自己收进单词本的词（词书收藏、精读、划词翻译都会落到这里）。"""
     return (
         select(Vocabulary)
         .join(UserVocabulary, UserVocabulary.vocabulary_id == Vocabulary.id)
@@ -469,18 +444,11 @@ def _my_words_stmt(user: User):
     )
 
 
-# ---------------------------------------------------------------------------
-# 随机测验：选择题 + 可中断续做
-# ---------------------------------------------------------------------------
-
-
 def _quiz_answer_text(word: Vocabulary) -> str:
-    """题目正确选项文案。释义优先用中文，缺失时退回 meaning（划词收进来的词常只有这个）。"""
     return (word.meaning_zh or "").strip() or (word.meaning or "").strip() or "暂无释义"
 
 
 def _quiz_options(db: Session, word: Vocabulary, correct: str) -> list[str]:
-    """生成 4 个中文选项：1 个正确释义 + 3 个来自词库其他词的中文释义。"""
     rows = db.scalars(
         select(Vocabulary.meaning_zh)
         .where(Vocabulary.id != word.id, Vocabulary.meaning_zh != "")
@@ -505,7 +473,6 @@ def get_quiz_session(db: Session, user: User) -> WordQuizSession | None:
 
 
 def _load_quiz_queue(db: Session, session: WordQuizSession) -> list[int]:
-    """读出待答队列，并剔除已被删除的单词。"""
     try:
         raw = json.loads(session.queue_json or "[]")
     except (TypeError, ValueError):
@@ -551,11 +518,6 @@ def serialize_quiz(db: Session, user: User, session: WordQuizSession) -> dict:
 
 
 def start_quiz(db: Session, user: User, count: int = 10, mode: str = "fresh") -> dict:
-    """开始或继续一轮测验。
-
-    - mode="resume" 且已有未完成的记录：原样接着答
-    - 否则重新从「我的单词本」随机抽 count 个词，覆盖旧记录
-    """
     session = get_quiz_session(db, user)
     if mode == "resume" and session is not None and _load_quiz_queue(db, session):
         return serialize_quiz(db, user, session)
@@ -590,7 +552,6 @@ def start_quiz(db: Session, user: User, count: int = 10, mode: str = "fresh") ->
 
 
 def answer_quiz(db: Session, user: User, word_id: int, choice: str) -> dict | None:
-    """作答一道题。答对出队，答错挪到队尾，直到队列空才算完成。"""
     session = get_quiz_session(db, user)
     if session is None:
         return None
@@ -606,11 +567,11 @@ def answer_quiz(db: Session, user: User, word_id: int, choice: str) -> dict | No
 
     queue.remove(word_id)
     if is_correct:
-        apply_study_answer(db, user, word, "remember", mode="review")
+        apply_study_answer(db, user, word, "remember")
     else:
         queue.append(word_id)
         session.wrong_count = int(session.wrong_count or 0) + 1
-        apply_study_answer(db, user, word, "forget", mode="review")
+        apply_study_answer(db, user, word, "forget")
 
     session.queue_json = json.dumps(queue)
     session.correct_count = max(0, int(session.total or 0) - len(queue))
@@ -630,7 +591,6 @@ def reset_quiz(db: Session, user: User) -> None:
 
 
 def get_word_model(db: Session, word_id: int) -> Vocabulary | None:
-    """按 id 取单词本体，供写接口复用（读接口用 get_word）。"""
     return db.get(Vocabulary, word_id)
 
 
@@ -659,16 +619,34 @@ def _get_or_create_state(
     )
     if state:
         return state
+    # 背词只记录学习状态，不代表用户把这个词收进了「我的词库」
     state = UserVocabulary(
         user_id=user.id,
         vocabulary_id=word.id,
         source=source,
         book_code=(word.books or "").split(",")[0] if word.books else "",
-        in_vocabulary=True,
+        mastery=0.0,
+        in_vocabulary=False,
     )
     db.add(state)
     db.flush()
     return state
+
+
+def _random_queue_order(db: Session, word: Vocabulary) -> int:
+    """在所属词书的顺序范围内取一个随机位置，让单词穿插回队列。"""
+    book = (word.books or "").split(",")[0]
+    stmt = select(func.min(Vocabulary.order_index), func.max(Vocabulary.order_index))
+    if book:
+        stmt = stmt.where(Vocabulary.books.like(f"%{book}%"))
+    else:
+        stmt = stmt.where(Vocabulary.id == word.id)
+    low, high = db.execute(stmt).one()
+    low = int(low or 0)
+    high = int(high if high is not None else low)
+    if high <= low:
+        return low
+    return random.randint(low, high)
 
 
 def add_to_vocabulary(db: Session, user: User, word_id: int, source: str = "wordbook") -> dict | None:
@@ -690,11 +668,6 @@ def add_to_vocabulary(db: Session, user: User, word_id: int, source: str = "word
 
 
 def remove_from_vocabulary(db: Session, user: User, word_id: int) -> dict | None:
-    """把单词移出「我的单词本」。
-
-    只清 in_vocabulary，保留 UserVocabulary 行本身（掌握度、复习记录、
-    学习流水都还在），这样误删后重新加入不会丢失学习进度。
-    """
     word = db.get(Vocabulary, word_id)
     if word is None:
         return None
@@ -720,20 +693,26 @@ def review_word(db: Session, user: User, word_id: int, correct: bool) -> dict | 
     return payload
 
 
-# ---------------------------------------------------------------------------
-# 背单词：新学 / 复习队列
-# ---------------------------------------------------------------------------
+def _words_studied_today(db: Session, user_id: int, task_date: str) -> int:
+    return int(
+        db.scalar(
+            select(func.count(func.distinct(WordStudyLog.vocabulary_id))).where(
+                WordStudyLog.user_id == user_id, WordStudyLog.study_date == task_date
+            )
+        )
+        or 0
+    )
 
 
-def _study_counts(db: Session, user_id: int, task_date: str) -> tuple[int, int]:
-    """今日已学的新词数、已复习的词数（按词去重）。"""
-    rows = db.execute(
-        select(WordStudyLog.mode, func.count(func.distinct(WordStudyLog.vocabulary_id)))
-        .where(WordStudyLog.user_id == user_id, WordStudyLog.study_date == task_date)
-        .group_by(WordStudyLog.mode)
-    ).all()
-    counts = {mode: int(total or 0) for mode, total in rows}
-    return counts.get("new", 0), counts.get("review", 0)
+def sync_study_progress(db: Session, user: User, task: DailyTask | None = None) -> DailyTask:
+    task = task or get_or_create_daily_task(db, user)
+    task.done_words = max(
+        task.done_words or 0, _words_studied_today(db, user.id, task.task_date)
+    )
+    db.flush()
+    settle_daily_task(db, task)
+    db.flush()
+    return task
 
 
 def _book_filter(stmt, book: str | None):
@@ -742,8 +721,15 @@ def _book_filter(stmt, book: str | None):
     return stmt
 
 
-def _new_queue_stmt(user: User, book: str | None):
-    """还没学过的词：没有学习记录，或记录仍是 new 且没真正学过。"""
+def _deck_order():
+    return (
+        func.coalesce(UserVocabulary.queue_order, Vocabulary.order_index),
+        Vocabulary.id,
+    )
+
+
+def _deck_stmt(user: User, book: str | None):
+    """词书里所有还没背出去的单词：没有记录，或还没到 mastered。"""
     stmt = (
         select(Vocabulary)
         .outerjoin(
@@ -754,27 +740,8 @@ def _new_queue_stmt(user: User, book: str | None):
         .where(
             or_(
                 UserVocabulary.id.is_(None),
-                UserVocabulary.status == "new",
-            ),
-            or_(
-                UserVocabulary.is_new_seen.is_(None),
-                UserVocabulary.is_new_seen.is_(False),
-            ),
-        )
-    )
-    return _book_filter(stmt, book)
-
-
-def _review_queue_stmt(user: User, book: str | None):
-    """到期待复习的词：learning / review 且 due_date 已到。mastered 永不出现。"""
-    stmt = (
-        select(Vocabulary)
-        .join(UserVocabulary, UserVocabulary.vocabulary_id == Vocabulary.id)
-        .where(
-            UserVocabulary.user_id == user.id,
-            UserVocabulary.status.in_(("learning", "review")),
-            UserVocabulary.due_date != "",
-            UserVocabulary.due_date <= today_str(),
+                func.coalesce(UserVocabulary.status, "new") != "mastered",
+            )
         )
     )
     return _book_filter(stmt, book)
@@ -786,7 +753,6 @@ def _count(db: Session, stmt) -> int:
 
 def study_summary(db: Session, user: User, book: str | None = None) -> dict:
     task = get_or_create_daily_task(db, user)
-    new_done, review_done = _study_counts(db, user.id, task.task_date)
     mastered = int(
         db.scalar(
             select(func.count())
@@ -795,21 +761,15 @@ def study_summary(db: Session, user: User, book: str | None = None) -> dict:
         )
         or 0
     )
+    target = task.target_words or 0
+    done = task.done_words or 0
     return {
         "date": task.task_date,
         "book": book or "",
-        "new": {
-            "target": task.target_new_words,
-            "done": new_done,
-            "remaining": max(0, task.target_new_words - new_done),
-            "available": _count(db, _new_queue_stmt(user, book)),
-        },
-        "review": {
-            "target": task.target_review_words,
-            "done": review_done,
-            "remaining": max(0, task.target_review_words - review_done),
-            "due": _count(db, _review_queue_stmt(user, book)),
-        },
+        "target": target,
+        "done": done,
+        "remaining": max(0, target - done),
+        "available": _count(db, _deck_stmt(user, book)),
         "mastered": mastered,
     }
 
@@ -817,34 +777,16 @@ def study_summary(db: Session, user: User, book: str | None = None) -> dict:
 def study_queue(
     db: Session,
     user: User,
-    mode: str = "new",
     book: str | None = None,
     limit: int | None = None,
 ) -> dict:
-    """取一批待学单词卡。默认按今日剩余目标决定数量。"""
-    mode = mode if mode in STUDY_MODES else "new"
-    task = get_or_create_daily_task(db, user)
-    new_done, review_done = _study_counts(db, user.id, task.task_date)
-
-    if mode == "new":
-        remaining = max(0, task.target_new_words - new_done)
-        stmt = _new_queue_stmt(user, book)
-    else:
-        remaining = max(0, task.target_review_words - review_done)
-        stmt = _review_queue_stmt(user, book)
-
-    take = max(1, min(limit, 100)) if limit else remaining
-    words: list[Vocabulary] = []
-    if take > 0:
-        words = list(
-            db.scalars(stmt.order_by(Vocabulary.order_index, Vocabulary.id).limit(take)).all()
-        )
-
+    take = max(1, min(int(limit), 100)) if limit else 20
+    stmt = _deck_stmt(user, book)
+    words = list(db.scalars(stmt.order_by(*_deck_order()).limit(take)).all())
     states = _state_map(db, user.id, [w.id for w in words])
     return {
-        "mode": mode,
         "book": book or "",
-        "remaining": remaining,
+        "remaining": _count(db, _deck_stmt(user, book)),
         "items": [serialize_word(w, states.get(w.id)) for w in words],
     }
 
@@ -854,22 +796,14 @@ def apply_study_answer(
     user: User,
     word: Vocabulary,
     action: str,
-    mode: str | None = None,
     book_code: str = "",
 ) -> dict:
-    """处理一次「没记住 / 记住了 / 已掌握」。
-
-    - 已掌握：status=mastered，之后不再进任何队列
-    - 记住了：进入复习阶段，按 REVIEW_STAGES 排下次复习日
-    - 没记住：回到 learning，今天就能再复习
-    """
     state = _get_or_create_state(db, user, word)
-    if mode not in STUDY_MODES:
-        mode = "review" if state.is_new_seen else "new"
     if action not in STUDY_ACTIONS:
         action = "remember"
 
     first_seen = not state.is_new_seen
+    log_mode = "new" if first_seen else "review"
     state.is_new_seen = True
     state.review_count = (state.review_count or 0) + 1
     state.exposure_count = (state.exposure_count or 0) + 1
@@ -878,21 +812,24 @@ def apply_study_answer(
         state.book_code = book_code
 
     if action == "mastered":
+        # 已掌握：掌握度拉满并移出词书
         state.status = "mastered"
         state.mastery = 1.0
-        state.review_stage = len(REVIEW_STAGES) - 1
-        state.due_date = ""
+        state.queue_order = None
     elif action == "remember":
-        stage = min((state.review_stage or 0) + 1, len(REVIEW_STAGES) - 1)
-        state.status = "review"
-        state.review_stage = stage
-        state.mastery = min(1.0, (state.mastery or 0) + 0.15)
-        state.due_date = (date.today() + timedelta(days=REVIEW_STAGES[stage])).isoformat()
+        # 记住了只加掌握度，加满三次才移出词书，否则换个随机位置继续出现
+        state.mastery = min(1.0, (state.mastery or 0.0) + MASTERY_STEP)
+        if state.mastery >= 1.0 - 1e-9:
+            state.mastery = 1.0
+            state.status = "mastered"
+            state.queue_order = None
+        else:
+            state.status = "learning"
+            state.queue_order = _random_queue_order(db, word)
     else:
+        # 没记住：掌握度不变，换个随机位置继续出现
         state.status = "learning"
-        state.review_stage = 0
-        state.mastery = max(0.0, (state.mastery or 0) - 0.1)
-        state.due_date = today_str()
+        state.queue_order = _random_queue_order(db, word)
 
     if action != "forget":
         state.correct_count = (state.correct_count or 0) + 1
@@ -909,7 +846,7 @@ def apply_study_answer(
             user_id=user.id,
             vocabulary_id=word.id,
             book_code=state.book_code or book_code or "",
-            mode=mode,
+            mode=log_mode,
             action=action,
             study_date=today_str(),
         )
@@ -922,7 +859,7 @@ def apply_study_answer(
     payload.update(
         {
             "action": action,
-            "mode": mode,
+            "mode": log_mode,
             "xp_gained": xp,
             "task": serialize_daily_task(task),
         }
@@ -930,28 +867,10 @@ def apply_study_answer(
     return payload
 
 
-def sync_study_progress(db: Session, user: User, task: DailyTask | None = None) -> DailyTask:
-    """把今日新学/复习的进度同步到每日任务，并触发结算。
-
-    done_words 取两者之和与既有值的较大者：收藏等旧路径也会写 done_words，
-    用 max 避免把那些进度覆盖掉。
-    """
-    task = task or get_or_create_daily_task(db, user)
-    new_done, review_done = _study_counts(db, user.id, task.task_date)
-    task.done_new_words = new_done
-    task.done_review_words = review_done
-    task.done_words = max(task.done_words or 0, new_done + review_done)
-    db.flush()
-    settle_daily_task(db, task)
-    db.flush()
-    return task
-
-
 LEADERBOARD_KINDS = ("xp", "streak", "contribution")
 
 
 def leaderboard(db: Session, kind: str = "xp", limit: int = 50, me: User | None = None) -> dict:
-    """三种榜单：经验值 / 连续打卡 / 贡献值。"""
     kind = kind if kind in LEADERBOARD_KINDS else "xp"
     limit = max(1, min(int(limit), 100))
 

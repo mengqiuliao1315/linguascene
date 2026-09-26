@@ -1,9 +1,3 @@
-"""纠错 Agent。
-
-独立于场景对话，用于对任意句子做语法与地道度分析。
-反馈原则：只纠正值得纠正的，不逐句打断用户。
-"""
-
 import logging
 
 from app.ai import rule_engine
@@ -21,7 +15,6 @@ class CorrectionAgent:
         self.cache = get_cache()
 
     def analyze(self, text: str, cefr_level: str = "B1") -> dict | None:
-        """返回 None 表示这句话没有问题，不需要打扰用户。"""
         cleaned = text.strip()
         if not cleaned:
             return None

@@ -273,18 +273,6 @@ body {
 }
 .pet-greet { animation: pet-greet 1.1s ease-in-out 1; transform-origin: 50% 80%; }
 
-/* 啃苹果：头往苹果那边点一下 */
-@keyframes pet-munch {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  40% { transform: translateY(3px) rotate(4deg); }
-}
-.pet-munch { animation: pet-munch 0.45s ease-in-out infinite; transform-origin: 50% 70%; }
-
-@keyframes pet-nibble {
-  0%, 100% { transform: translateY(0) scale(1); opacity: 1; }
-  50% { transform: translateY(3px) scale(0.86); opacity: 0.85; }
-}
-
 /* 热力图悬停的日期提示：轻微上浮淡入，比浏览器原生 title 更精致 */
 @keyframes heat-tip-in {
   from { transform: translateY(3px) scale(0.96); opacity: 0; }
@@ -308,7 +296,6 @@ body {
   .pet-enter,
   .pet-breathe,
   .pet-greet,
-  .pet-munch,
   .heat-tip,
   .achv-toast {
     animation: none;

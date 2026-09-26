@@ -28,4 +28,4 @@ class SaveVocabularyRequest(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    quality: int  # 0 忘记 / 1 模糊 / 2 记得
+    quality: int

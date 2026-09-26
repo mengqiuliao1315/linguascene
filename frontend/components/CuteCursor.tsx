@@ -1,10 +1,3 @@
-/**
- * 可爱的鼠标特效：跟随光晕 + 星星拖尾 + 点击爆开 + 气泡音。
- * 纯 Canvas 绘制，pointer-events 为 none，不影响任何交互。
- * 点击音效用 Web Audio 现场合成，不加载音频文件；
- * 想关掉的话在浏览器里把 localStorage 的 cuteCursorSound 设成 "off"。
- * 触屏设备自动不启用；系统开启「减少动态效果」时只保留跟手的光晕，点击音效照常。
- */
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -25,7 +18,6 @@ type Particle = {
   kind: "star" | "heart" | "dot";
 };
 
-/** 四角星光，边用二次曲线收到中心，形成内凹的星形 */
 function starPath(ctx: CanvasRenderingContext2D, r: number) {
   const tips = 4;
   ctx.beginPath();
@@ -51,17 +43,12 @@ type BubbleSound = {
   dispose: () => void;
 };
 
-/**
- * 气泡音：正弦波做一次先上滑、再轻轻回落的音高扫动，配上极短的指数衰减包络，
- * 听上去就是「啵」的一声。音高随点击的横向位置浮动，连点也不会像机器音。
- * 用 Web Audio 现场合成，不引入任何音频文件。
- */
 function createBubbleSound(): BubbleSound | null {
-  // 关掉音效：在浏览器控制台执行 localStorage.setItem("cuteCursorSound", "off")
+
   try {
     if (localStorage.getItem("cuteCursorSound") === "off") return null;
   } catch {
-    // 隐私模式下 localStorage 不可用，那就照常播放
+
   }
 
   const w = window as unknown as {
@@ -72,7 +59,7 @@ function createBubbleSound(): BubbleSound | null {
   if (!Ctor) return null;
 
   let ctx: AudioContext | null = null;
-  // 浏览器要求 AudioContext 在用户手势里创建/恢复，所以等第一次点击或按键
+
   const unlock = () => {
     if (!ctx) ctx = new Ctor();
     if (ctx.state === "suspended") void ctx.resume();
@@ -120,7 +107,7 @@ export function CuteCursor() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    // 触屏设备没有跟随指针的光标，直接不启用
+
     if (
       !window.matchMedia("(any-hover: hover) and (any-pointer: fine)").matches
     ) {
@@ -129,11 +116,9 @@ export function CuteCursor() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // 只在自定义光标真正生效时隐藏系统光标
     const root = document.documentElement;
     root.classList.add("cute-cursor-active");
 
-    // 系统开启「减少动态效果」时保留光标本体，只去掉拖尾、爆开和眨眼
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
@@ -154,7 +139,6 @@ export function CuteCursor() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    // 指针目标位置 vs 光晕实际位置（弹簧跟随，产生滞后感）
     const target = { x: width / 2, y: height / 2 };
     const aura = { x: target.x, y: target.y, vx: 0, vy: 0, pop: 0 };
     let lastSpawn = { x: target.x, y: target.y };
@@ -240,7 +224,6 @@ export function CuteCursor() {
       ctx.rotate(tilt);
       ctx.scale(1 + pop * 0.18, 1 - pop * 0.1);
 
-      // 玻璃光晕
       const grad = ctx.createRadialGradient(0, 0, 1, 0, 0, r);
       grad.addColorStop(0, "rgba(147, 197, 253, 0.34)");
       grad.addColorStop(1, "rgba(59, 130, 246, 0.05)");
@@ -252,7 +235,6 @@ export function CuteCursor() {
       ctx.strokeStyle = `rgba(59, 130, 246, ${0.42 - pop * 0.2})`;
       ctx.stroke();
 
-      // 眼睛（朝运动方向看，偶尔眨一下）
       const blinking = blinkTimer > 0;
       const ex = dirX * 2.4;
       const ey = dirY * 2.4;
@@ -274,7 +256,6 @@ export function CuteCursor() {
         }
       }
 
-      // 腮红
       ctx.fillStyle = "rgba(244, 114, 182, 0.32)";
       for (const side of [-1, 1]) {
         ctx.beginPath();
@@ -282,7 +263,6 @@ export function CuteCursor() {
         ctx.fill();
       }
 
-      // 微笑
       ctx.strokeStyle = "rgba(30, 58, 138, 0.75)";
       ctx.beginPath();
       ctx.arc(ex * 0.4, 2.4, 2.6, 0.25 * Math.PI, 0.75 * Math.PI);
@@ -290,7 +270,6 @@ export function CuteCursor() {
 
       ctx.restore();
 
-      // 速度感的小尾巴
       if (speed > 1.5) {
         ctx.save();
         ctx.globalAlpha = Math.min(0.5, speed / 26);
@@ -304,7 +283,7 @@ export function CuteCursor() {
 
     const step = () => {
       if (reduceMotion) {
-        // 减少动态效果：直接跟手，不做弹簧滞后
+
         aura.x = target.x;
         aura.y = target.y;
         aura.vx = 0;
@@ -366,7 +345,6 @@ export function CuteCursor() {
       raf = requestAnimationFrame(loop);
     };
 
-    // 事件里同步画一帧：即使 requestAnimationFrame 被节流也能立刻看到光标
     const tick = () => {
       step();
       render();
@@ -393,7 +371,7 @@ export function CuteCursor() {
       if (dist > 9) {
         lastSpawn = { x: target.x, y: target.y };
         if (!reduceMotion) {
-          // 往运动反方向轻轻飘出
+
           const nx = dx / dist;
           const ny = dy / dist;
           const spread = 0.9;

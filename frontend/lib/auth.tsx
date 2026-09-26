@@ -1,6 +1,3 @@
-/**
- * 认证上下文：提供当前用户、登录/注册/登出，以及未登录时的跳转保护。
- */
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -61,8 +58,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void loadUser();
   }, [loadUser]);
 
-  // 皮肤跟用户偏好走：登录后套用其选择的皮肤，退出登录则回到默认。
-  // 必须等 loading 结束再动手，否则首屏 user 还是 null，会把刚恢复的皮肤清掉。
   useEffect(() => {
     if (loading) return;
     applyTheme(user?.theme);
@@ -118,7 +113,6 @@ export function useAuth(): AuthContextValue {
   return context;
 }
 
-/** 需要在登录后才能访问的页面用它包裹内容。 */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -139,7 +133,6 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** 仅管理员可访问。普通用户会被送回首页。 */
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();

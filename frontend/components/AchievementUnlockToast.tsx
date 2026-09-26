@@ -1,13 +1,3 @@
-/**
- * 成就解锁提示。
- *
- * 解锁发生在用户自己的操作请求里（背单词、读文章、完成场景……），
- * 前端没法直接拿到那一刻的响应，所以这里主动去问后端：
- * 有没有「刚解锁但还没弹过」的成就。挂在根布局上，任何页面都能收到。
- *
- * 已弹过的成就会回填 notified_at，同一条不会弹第二次；
- * 同一浏览器会话内也用 seen 兜一层，避免请求还没回填就重复入队。
- */
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -17,9 +7,8 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { Achievement } from "@/lib/types";
 
-// 轮询间隔：成就解锁不频繁，20 秒足够及时，也不至于压后端
 const POLL_MS = 20000;
-// 单条停留时长
+
 const TOAST_MS = 5200;
 
 export function AchievementUnlockToast() {
@@ -43,13 +32,12 @@ export function AchievementUnlockToast() {
         setQueue((prev) => [...prev, ...fresh]);
       }
     } catch {
-      // 提示是锦上添花，取不到就静默跳过
+
     } finally {
       checking.current = false;
     }
   }, []);
 
-  // 登录后、每次换页、回到前台、以及固定间隔都查一次
   useEffect(() => {
     if (!user) return;
     check();
@@ -65,7 +53,6 @@ export function AchievementUnlockToast() {
     };
   }, [user, pathname, check]);
 
-  // 队列里还有就挨个展示，一次只露一条，避免刷屏
   useEffect(() => {
     if (current || queue.length === 0) return;
     const [next, ...rest] = queue;
@@ -80,7 +67,7 @@ export function AchievementUnlockToast() {
     }
     setCurrent((shown) => {
       if (shown) {
-        // 回填失败也无所谓：本地 seen 已经拦住重复弹
+
         api.ackAchievements([shown.code]).catch(() => {});
       }
       return null;

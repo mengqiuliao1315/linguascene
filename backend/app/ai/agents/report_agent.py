@@ -1,5 +1,3 @@
-"""学习报告 Agent：把一次对话的真实统计转成可展示的报告。"""
-
 import logging
 
 from app.ai import rule_engine
@@ -65,7 +63,6 @@ class ReportAgent:
                 )
                 if raw:
                     report = ConversationReport.model_validate(raw)
-                    # 分数与统计以本地真实数据为准，避免模型编造
                     report.task_progress = task_progress
                     report.corrections_count = stats["corrections_count"]
                     report.xp_earned = xp_earned

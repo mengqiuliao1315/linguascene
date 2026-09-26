@@ -24,16 +24,9 @@ class UserPublic(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
-    """用户可自行修改的资料。
-
-    账号标识（用户名、邮箱）也在这里：管理员只是最初的创建者，账号分发
-    出去之后用户要能自己改。改动标识属于敏感操作，必须同时带上当前密码，
-    由接口校验；头像走单独的上传接口。
-    """
 
     username: str | None = Field(default=None, min_length=2, max_length=32)
     email: EmailStr | None = None
-    # 仅在改用户名/邮箱时必填，改其他资料不需要
     current_password: str | None = Field(default=None, max_length=72)
 
     cefr_level: str | None = None

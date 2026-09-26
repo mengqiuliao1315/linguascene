@@ -1,8 +1,3 @@
-"""社交服务：每日计划、打卡热力图、个人主页、好友、私信、论坛。
-
-统计口径集中在这里，页面只负责展示。
-"""
-
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import desc, func, or_, select
@@ -41,11 +36,7 @@ def _day_start(day: datetime | None = None) -> datetime:
     return datetime.combine(base.date(), datetime.min.time(), tzinfo=timezone.utc)
 
 
-# ------------------------------------------------------------------ 每日统计
-
-
 def daily_stats(db: Session, user: User, day: datetime | None = None) -> dict:
-    """当天的各项学习量。自建计划的可选口径都从这里取。"""
     start = _day_start(day)
     end = start + timedelta(days=1)
 
@@ -87,14 +78,7 @@ def daily_stats(db: Session, user: User, day: datetime | None = None) -> dict:
     }
 
 
-# ------------------------------------------------------------------ 每日计划
-
-
 def ensure_default_quests(db: Session, user: User) -> None:
-    """首次打开面板时，把四条默认计划落成用户自己的计划，只播一次。
-
-    播完置 user.quests_seeded；之后用户改名、改目标、删光都不会再长出来。
-    """
     if user.quests_seeded:
         return
 
@@ -115,12 +99,6 @@ def ensure_default_quests(db: Session, user: User) -> None:
 
 
 def _quest_payload(quest: CustomQuest, stats: dict, checked: bool) -> dict:
-    """一条计划的接口形状。
-
-    progress 是按 metric 自动统计出来的提示（「今天做到多少了」）；
-    completed 只看用户当天有没有打勾——计划做什么只有用户自己清楚，
-    系统不替用户判定完成。
-    """
     progress = stats.get(quest.metric, 0)
     return {
         "id": quest.id,
@@ -137,7 +115,6 @@ def _quest_payload(quest: CustomQuest, stats: dict, checked: bool) -> dict:
 
 
 def _checked_quest_ids(db: Session, user: User, day: str | None = None) -> set[int]:
-    """当天已打勾的计划 id 集合。"""
     rows = db.execute(
         select(QuestCheck.quest_id).where(
             QuestCheck.user_id == user.id, QuestCheck.day == (day or _today())
@@ -147,7 +124,6 @@ def _checked_quest_ids(db: Session, user: User, day: str | None = None) -> set[i
 
 
 def merged_quests(db: Session, user: User) -> list[dict]:
-    """用户自己的全部每日计划，带当天进度与打勾状态。"""
     ensure_default_quests(db, user)
     stats = daily_stats(db, user)
     checked = _checked_quest_ids(db, user)
@@ -162,17 +138,11 @@ def merged_quests(db: Session, user: User) -> list[dict]:
 
 
 def quest_payload(db: Session, user: User, quest: CustomQuest) -> dict:
-    """单条计划的最新状态，创建/修改/打勾后回给前端。"""
     checked = quest.id in _checked_quest_ids(db, user)
     return _quest_payload(quest, daily_stats(db, user), checked)
 
 
 def set_quest_checked(db: Session, user: User, quest: CustomQuest, completed: bool) -> dict:
-    """给一条计划打勾 / 取消打勾。
-
-    打勾算当天一次学习活动：热力图会多一格，连续打卡天数也会跟着走
-    （见 activity_by_day 与 gamification_service.touch_streak）。
-    """
     day = _today()
     existing = db.execute(
         select(QuestCheck).where(
@@ -194,7 +164,6 @@ def set_quest_checked(db: Session, user: User, quest: CustomQuest, completed: bo
 
 
 def create_quest(db: Session, user: User, payload) -> CustomQuest:
-    # 先补默认计划，保证用户自己加的那条排在四条默认计划后面
     ensure_default_quests(db, user)
     count = db.execute(
         select(func.count(CustomQuest.id)).where(CustomQuest.user_id == user.id)
@@ -237,17 +206,7 @@ def delete_quest(db: Session, quest: CustomQuest) -> None:
     db.flush()
 
 
-# ------------------------------------------------------------------ 打卡热力图
-
-
 def activity_by_day(db: Session, user: User, days: int = HEATMAP_DAYS) -> dict[str, int]:
-    """按天汇总学习活动次数，用于热力图与活跃天数。
-
-    三个来源：XpRecord（背单词、场景、复习等）、ContributionRecord
-    （发帖、评论、上传内容——这些只记贡献值，不发经验）、QuestCheck
-    （用户手动打勾的每日计划——站内统计不到的行为靠它补上）。少了后两者，
-    连续打卡天数涨了、热力图却还是空的。
-    """
     since = _day_start() - timedelta(days=days - 1)
     rows = db.execute(
         select(XpRecord.created_at).where(
@@ -307,11 +266,7 @@ def heatmap(db: Session, user: User, days: int = HEATMAP_DAYS) -> dict:
     }
 
 
-# ------------------------------------------------------------------ 用户数据
-
-
 def contribution_total(db: Session, user_id: int) -> int:
-    """单个用户的累计贡献值，取自贡献值流水。"""
     return int(
         db.execute(
             select(func.coalesce(func.sum(ContributionRecord.amount), 0)).where(
@@ -322,11 +277,6 @@ def contribution_total(db: Session, user_id: int) -> int:
 
 
 def contribution_of(db: Session, user_id: int) -> dict:
-    """个人主页的贡献数据。
-
-    分数取自贡献值流水，与排行榜同源，两处不会各算一个数；下面四项是活动明细，
-    按实际记录数展示，不参与计分。
-    """
     published = db.execute(
         select(func.count(UserContent.id)).where(
             UserContent.user_id == user_id, UserContent.is_public.is_(True)
@@ -354,7 +304,6 @@ def contribution_of(db: Session, user_id: int) -> dict:
 
 
 def public_stats(db: Session, user: User) -> dict:
-    """个人主页展示的数据，任何人都能看。"""
     level, level_name = levels.level_for_xp(user.xp)
     contrib = contribution_of(db, user.id)
 
@@ -393,7 +342,6 @@ def public_stats(db: Session, user: User) -> dict:
 
 
 def contribution_totals(db: Session) -> dict[int, int]:
-    """每个用户的累计贡献值。没有记录的用户不在返回结果里。"""
     rows = db.execute(
         select(
             ContributionRecord.user_id,
@@ -404,10 +352,6 @@ def contribution_totals(db: Session) -> dict[int, int]:
 
 
 def leaderboard(db: Session, me: User, metric: str = "xp", limit: int = 20) -> dict:
-    """排行榜：柱状图 + 列表共用同一份数据。
-
-    metric 支持 xp（累计经验）、streak（连续打卡天数）、contribution（贡献值）。
-    """
     users = db.execute(select(User)).scalars().all()
     contributions = contribution_totals(db) if metric == "contribution" else {}
 
@@ -452,9 +396,6 @@ def leaderboard(db: Session, me: User, metric: str = "xp", limit: int = 20) -> d
     return {"bars": top, "entries": entries}
 
 
-# ------------------------------------------------------------------ 好友
-
-
 def _pair(db: Session, a: int, b: int) -> Friendship | None:
     return db.execute(
         select(Friendship).where(
@@ -492,7 +433,6 @@ def request_friend(db: Session, me: User, other_id: int) -> Friendship:
             raise ValueError("你们已经是好友")
         if link.requester_id == me.id:
             raise ValueError("已发送过申请")
-        # 对方先发过申请，这里直接互相通过
         link.status = "accepted"
         db.flush()
         return link
@@ -594,9 +534,6 @@ def are_friends(db: Session, a: int, b: int) -> bool:
     return bool(link and link.status == "accepted")
 
 
-# ------------------------------------------------------------------ 私信
-
-
 def send_message(db: Session, me: User, other_id: int, content: str) -> ChatMessage:
     if not are_friends(db, me.id, other_id):
         raise ValueError("只有好友之间可以聊天")
@@ -626,7 +563,6 @@ def list_messages(
         .limit(limit)
     ).scalars().all()
 
-    # 打开对话即视为已读
     changed = False
     for row in rows:
         if row.recipient_id == me.id and row.read_at is None:
@@ -639,7 +575,6 @@ def list_messages(
 
 
 def chat_threads(db: Session, me: User) -> list[dict]:
-    """按好友聚合最近一条消息，附未读数。"""
     friends = list_friends(db, me)
     result = []
     for friend in friends:
@@ -689,9 +624,6 @@ def unread_total(db: Session, me: User) -> int:
     )
 
 
-# ------------------------------------------------------------------ 论坛
-
-
 def _author(db: Session, user_id: int) -> dict:
     user = db.get(User, user_id)
     if not user:
@@ -717,7 +649,6 @@ def _tags(raw: str) -> list[str]:
 
 
 def _plain(content: str) -> str:
-    """去掉 Markdown 标记，压成一行。"""
     import re
 
     text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", content or "")
@@ -727,12 +658,10 @@ def _plain(content: str) -> str:
 
 
 def _summary(content: str, limit: int = 120) -> str:
-    """列表页摘要：截断到 limit 字，卡片折叠时展示。"""
     return _plain(content)[:limit]
 
 
 def _cover(content: str) -> str | None:
-    """取正文第一张图片作为卡片封面，没有就返回 None。"""
     import re
 
     match = re.search(r"!\[[^\]]*\]\(([^)]+)\)", content or "")
@@ -740,11 +669,9 @@ def _cover(content: str) -> str | None:
 
 
 def _truncated(content: str, limit: int = 120) -> bool:
-    """正文是否长到需要折叠，前端据此显示「展开全文」。"""
     return len(_plain(content)) > limit
 
 
-# 排序方式：最新 / 最热 / 讨论最多。前端选项卡与之一一对应。
 POST_SORTS = ("new", "hot", "active")
 _POST_ORDER = {
     "new": (ForumPost.created_at.desc(), ForumPost.id.desc()),
@@ -754,7 +681,6 @@ _POST_ORDER = {
 
 
 def _tag_clause(tag: str):
-    """精确匹配逗号分隔的标签，避免 "口语" 命中 "口语练习"。"""
     return or_(
         ForumPost.tags == tag,
         ForumPost.tags.like(f"{tag},%"),
@@ -827,7 +753,6 @@ def get_post(db: Session, me: User, post_id: int, count_view: bool = True) -> Fo
     post = db.get(ForumPost, post_id)
     if not post:
         return None
-    # 作者自己反复打开不算阅读量，避免刷数据
     if count_view and post.user_id != me.id:
         post.view_count += 1
         db.flush()
@@ -944,7 +869,6 @@ def delete_comment(db: Session, comment: ForumComment) -> None:
 
 
 def count_posts(db: Session, *, tag: str = "", keyword: str = "") -> int:
-    """与 list_posts 同口径的过滤条件下，帖子总数，用于分页。"""
     query = select(func.count(ForumPost.id))
     if tag:
         query = query.where(_tag_clause(tag))
@@ -957,7 +881,6 @@ def count_posts(db: Session, *, tag: str = "", keyword: str = "") -> int:
 
 
 def popular_tags(db: Session, limit: int = 12) -> list[dict]:
-    """按帖子数统计热门标签，给列表页做快捷筛选。"""
     counts: dict[str, int] = {}
     rows = db.execute(select(ForumPost.tags)).scalars().all()
     for raw in rows:

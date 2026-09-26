@@ -1,5 +1,3 @@
-"""文章分析 Agent：把任意英语材料转成学习材料。"""
-
 import logging
 
 from app.ai import rule_engine
@@ -37,7 +35,6 @@ class ArticleAgent:
         return result
 
     def _analyze_uncached(self, content: str, cefr_level: str) -> ArticleAnalysisOut:
-        # 长文章先截断，避免一次塞入超长上下文；生产环境应改为分块摘要再分析
         truncated = content[:MAX_ANALYSIS_CHARS]
 
         if not self.provider.is_mock:
@@ -56,7 +53,6 @@ class ArticleAgent:
         return self._offline_analyze(truncated, cefr_level)
 
     def _offline_analyze(self, content: str, cefr_level: str) -> ArticleAnalysisOut:
-        """离线：词汇按分级词表提取，句子与问题用可复现的文本规则生成。"""
         vocab_hits = rule_engine.extract_vocabulary(content, cefr_level, limit=8)
 
         sentences = [

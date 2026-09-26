@@ -1,13 +1,3 @@
-"""用户之间的 AI 模型分享。
-
-- 任何用户都能把自己的一条供应商配置（Base URL、Key、模型列表）分享出去；
-- 分享可以随时停用（停止推送）或删除（其他人立即看不到）；
-- 别人登录后会看到弹窗，可以"采纳"直接用，也可以"关闭"不再提示。
-
-分享出去的 Key 始终加密存在服务端，只回传指纹尾号，任何人都拿不到明文。
-全站没有"管理员免费模型"，管理员要提供模型同样走这里分享。
-"""
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -59,8 +49,6 @@ def create_share(
     config = ai_config_service.get_config(db, user, payload.config_id)
     if config is None:
         raise HTTPException(status_code=404, detail="供应商不存在")
-    # 地址/Key/模型缺一不可：否则分享出去的是「别人采纳了也用不了」的空壳，
-    # 而且分享是复制一份地址出去，事后改自己的配置也修不好别人的那一份。
     if ai_config_service.config_provider(config) is None:
         raise HTTPException(status_code=400, detail="这条供应商还没配置好，先补全地址、Key 与模型")
 

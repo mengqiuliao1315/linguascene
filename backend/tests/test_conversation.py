@@ -60,11 +60,6 @@ def test_conversation_progresses_through_tasks(auth_client):
 
 
 def test_offline_mode_gives_no_correction_or_comment(auth_client):
-    """离线（没有可用模型）时不点评用户。
-
-    规则引擎能挑出的「错」太粗糙：把 "I want a coffee" 改成 "I'd like" 这类
-    建议在没有模型兜底时反而误导人，所以离线只推进任务，不给纠错、不给点评。
-    """
     data = _start_coffee(auth_client)
     response = auth_client.post(
         f"/api/conversations/{data['id']}/message",
@@ -78,7 +73,6 @@ def test_offline_mode_gives_no_correction_or_comment(auth_client):
 
 
 def test_offline_mode_still_returns_task_hint(auth_client):
-    """点评可以没有，下一步该说什么必须有：提示来自本地任务表，稳定可靠。"""
     data = _start_coffee(auth_client)
     response = auth_client.post(
         f"/api/conversations/{data['id']}/message",
@@ -147,7 +141,6 @@ def test_free_talk_mode(auth_client):
 
 
 def test_hint_starts_on_first_task(auth_client):
-    """开局就应给出第一步的中文提示，用户不会一上来就卡住。"""
     data = _start_coffee(auth_client)
     hint = data["hint"]
     assert hint is not None
@@ -214,7 +207,6 @@ def test_conversation_list(auth_client):
 
 
 def test_free_talk_history_keeps_one_row(auth_client):
-    """自由对话也只留一行：它和场景一样，是「继续 / 重新开始」的同一个入口。"""
     auth_client.post("/api/conversations/free-talk/start")
     second = auth_client.post("/api/conversations/free-talk/start").json()
     auth_client.post(
@@ -237,11 +229,6 @@ def test_free_talk_history_keeps_one_row(auth_client):
 
 
 def _stored_conversation_ids(user_id: int, *, scenario_id: int | None) -> list[int]:
-    """直接看库里还剩哪些记录。
-
-    经列表接口是看不出「旧记录被删了」的——列表本来就按场景去重；而且 SQLite 会
-    复用刚删掉的行的 id，靠 id 是否 404 也不可靠。
-    """
     from sqlalchemy import select
 
     from app.core.database import SessionLocal
@@ -267,7 +254,6 @@ def _coffee_scenario_id(client) -> int:
 
 
 def test_restart_replaces_scenario_history(auth_client):
-    """重新开始会覆盖旧记录：库里同一场景只剩这一次，不留重复。"""
     user_id = auth_client.get("/api/users/me").json()["id"]
     scenario_id = _coffee_scenario_id(auth_client)
 
@@ -283,7 +269,7 @@ def test_restart_replaces_scenario_history(auth_client):
 
     assert _stored_conversation_ids(user_id, scenario_id=scenario_id) == [newer["id"]]
     assert newer["task_progress"] == 0
-    assert len(newer["messages"]) == 1  # 干净的新会话，不带旧对话的历史
+    assert len(newer["messages"]) == 1
 
     rows = [
         item
@@ -320,7 +306,6 @@ def test_delete_conversation(auth_client):
 
 
 def test_scenario_history_keeps_one_row_per_scenario(auth_client):
-    """场景按模块去重只剩一行，代表取最近一次（点进去接着聊），进度取历史最高。"""
     older = _start_coffee(auth_client)
     auth_client.post(
         f"/api/conversations/{older['id']}/message",
@@ -375,7 +360,6 @@ def _start_interview(client) -> dict:
 
 
 def test_number_word_completes_task(auth_client):
-    """用户写 "three years" 而不是 "3 years" 时也必须判定完成。"""
     data = _start_interview(auth_client)
     body = auth_client.post(
         f"/api/conversations/{data['id']}/message",
@@ -385,7 +369,6 @@ def test_number_word_completes_task(auth_client):
 
 
 def test_hint_advances_after_number_word_answer(auth_client):
-    """提示要随用户输入实时推进，不能一直停在第一步。"""
     data = _start_interview(auth_client)
     assert data["hint"]["task_key"] == "self_intro"
 
@@ -397,11 +380,6 @@ def test_hint_advances_after_number_word_answer(auth_client):
 
 
 def test_every_task_accepts_its_own_suggested_en():
-    """每个任务自己的示例句都必须判定完成，否则提示卡会永远卡在同一步。
-
-    这是一条回归护栏：曾经 self_intro / ask_quantity / ask_diagnosis 三个任务
-    连自己的示例句都判不过。
-    """
     from app.ai import rule_engine
     from app.data.scenario_content import TASKS
 

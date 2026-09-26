@@ -70,8 +70,7 @@ function ScenariosContent() {
               level={scenario.level}
               minutes={scenario.estimated_minutes}
               role={scenario.ai_role}
-              // 鼠标停在卡片上就把这句开场白的音频取回来：内置场景是项目里的
-              // 静态文件，点进去时它已经在浏览器缓存里，开口就是即时的。
+
               onHover={() =>
                 prefetchSpeech(scenario.opening_line, {
                   url: staticOpeningUrl(scenario.slug, scenario.opening_line),

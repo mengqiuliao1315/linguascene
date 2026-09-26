@@ -1,21 +1,15 @@
-/**
- * 管理员控制台：内部站点不开放注册，账号统一在这里创建、改密码、删除。
- * 明文密码只在创建或重置时展示一次，列表不再回读当前密码。
- */
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { Avatar, EmptyState, Modal, Spinner } from "@/components/ui";
-import { api } from "@/lib/api";
+import { BASE_PATH, api } from "@/lib/api";
 import { RequireAdmin } from "@/lib/auth";
 import type { AdminUser, CreatedCredentials } from "@/lib/types";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
 
-/** 生成一个足够随机、方便念给别人的初始密码。 */
 function suggestPassword(): string {
   const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return Array.from({ length: 10 }, () =>
@@ -23,24 +17,18 @@ function suggestPassword(): string {
   ).join("");
 }
 
-/**
- * 把账号信息排成一段可直接发给对方的文本。
- * 微信/QQ 不认 Markdown，所以只用换行、分隔线和 emoji，粘贴后依然是整齐的几行。
- */
 function buildShareText(account: {
   username: string;
   email: string;
-  password?: string | null;
+  password: string;
 }): string {
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const origin =
+    typeof window === "undefined" ? "" : `${window.location.origin}${BASE_PATH}`;
   const rows: Array<[string, string]> = [
     ["🔗 网址", origin],
     ["👤 用户名", account.username],
     ["📧 邮箱", account.email],
-    [
-      "🔑 密码",
-      account.password || "暂无法读取，请联系管理员重置",
-    ],
+    ["🔑 密码", account.password],
   ];
   const rule = "━━━━━━━━━━━━━━━━━━━━";
   return [
@@ -52,7 +40,6 @@ function buildShareText(account: {
   ].join("\n");
 }
 
-/** 复制文本。navigator.clipboard 在 http 访问（非 localhost）下不可用，退回 execCommand。 */
 async function writeClipboard(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
@@ -60,7 +47,7 @@ async function writeClipboard(text: string): Promise<boolean> {
       return true;
     }
   } catch {
-    // 落到下面的兜底方案
+
   }
   try {
     const area = document.createElement("textarea");
@@ -94,7 +81,6 @@ function AdminConsole() {
 
   const [busyId, setBusyId] = useState<number | null>(null);
 
-  // 编辑弹层：管理员可以改用户名/邮箱，也可以重置密码
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [editUsername, setEditUsername] = useState("");
   const [editEmail, setEditEmail] = useState("");
@@ -116,8 +102,6 @@ function AdminConsole() {
     void load();
   }, [load]);
 
-  // 用户随时可能自己改用户名/邮箱/密码，这里定时静默刷新并在窗口重新聚焦时
-  // 再拉一次，保证后台看到的就是他们最新提交的值，不需要管理员手动刷新。
   useEffect(() => {
     const timer = window.setInterval(() => void load(true), 15000);
     const onFocus = () => void load(true);
@@ -188,34 +172,19 @@ function AdminConsole() {
     }
   }
 
-  /** 分享登录信息。当前密码不再从列表读取，需要时先重置再复制。 */
   async function shareAccount(user: AdminUser) {
     setError("");
-    if (
-      !window.confirm(
-        `列表不再保存明文密码。要给 ${user.username} 生成新密码并复制账号信息吗？`
-      )
-    ) {
-      return;
-    }
-    const next = suggestPassword();
+    setNotice("");
     setBusyId(user.id);
     try {
-      const result = await api.adminResetPassword(user.id, next);
-      const credentials = {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        password: result.password || next,
-      };
+      const credentials = await api.adminCredentials(user.id);
       setCreated(credentials);
       const ok = await writeClipboard(buildShareText(credentials));
       setNotice(
         ok
-          ? `已重置并复制 ${user.username} 的账号信息`
-          : "密码已重置，但复制失败，请从下方卡片手动复制"
+          ? `已复制 ${user.username} 的账号信息`
+          : "复制失败，请从下方卡片手动复制"
       );
-      load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "分享失败");
     } finally {

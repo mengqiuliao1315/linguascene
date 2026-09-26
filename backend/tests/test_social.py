@@ -1,9 +1,3 @@
-"""社交功能：每日计划、打卡热力图、排行榜、好友、私信、论坛。
-
-需要两个用户互相操作，所以不用 conftest 里那个共享 headers 的 auth_client，
-而是每个用户一个独立的 TestClient。
-"""
-
 import uuid
 
 import pytest
@@ -18,7 +12,6 @@ PASSWORD = "tester12345"
 
 @pytest.fixture
 def make_user():
-    """返回一个工厂：每次调用造一个独立登录的用户。"""
     clients: list[TestClient] = []
 
     def _make(prefix: str = "u"):
@@ -51,7 +44,6 @@ def make_user():
 
 @pytest.fixture
 def make_admin(make_user):
-    """管理员客户端，用于置顶这类需要权限的操作。"""
 
     def _make():
         client = TestClient(app)
@@ -72,23 +64,15 @@ def make_admin(make_user):
     yield _make
 
 
-# ------------------------------------------------------------------ 每日计划
-
-
 def test_default_quests_are_seeded_once(make_user):
-    """新用户第一次拉列表会拿到四条默认计划，且只播一次。"""
     client, _, _ = make_user()
     quests = client.get("/api/quests").json()
 
     assert len(quests) == len(levels.DAILY_QUESTS)
-    # 默认计划也是用户自己的，可以改可以删，所以都带 id
     assert all(q["custom"] is True and q["id"] for q in quests)
     assert all(q["key"] and q["icon"] and q["label"] for q in quests)
-    # 进度不能超过目标，否则前端进度条会溢出
     assert all(0 <= q["progress"] <= q["target"] for q in quests)
-    # 默认计划的 XP 由「今日任务」发放，这里不挂
     assert all(q["xp"] == 0 for q in quests)
-    # 没打勾之前一律未完成，不看统计进度
     assert all(q["completed"] is False for q in quests)
 
     again = client.get("/api/quests").json()
@@ -96,7 +80,6 @@ def test_default_quests_are_seeded_once(make_user):
 
 
 def test_deleted_default_quests_do_not_come_back(make_user):
-    """删光默认计划后不会再自动长出来。"""
     client, _, _ = make_user()
     for quest in client.get("/api/quests").json():
         assert client.delete(f"/api/quests/{quest['id']}").status_code == 204
@@ -105,7 +88,6 @@ def test_deleted_default_quests_do_not_come_back(make_user):
 
 
 def test_quest_completion_is_manual(make_user):
-    """完成与否由用户打勾决定，不看站内统计进度。"""
     client, _, _ = make_user()
     quest = client.get("/api/quests").json()[0]
     assert quest["completed"] is False
@@ -114,7 +96,6 @@ def test_quest_completion_is_manual(make_user):
     assert checked.status_code == 200, checked.text
     body = checked.json()
     assert body["completed"] is True
-    # 新用户没有任何站内学习记录，进度是 0，但用户说完成了就是完成了
     assert body["progress"] == 0
 
     listed = {q["id"]: q for q in client.get("/api/quests").json()}
@@ -126,7 +107,6 @@ def test_quest_completion_is_manual(make_user):
 
 
 def test_quest_check_counts_as_activity(make_user):
-    """手动打勾算当天一次学习活动：热力图有记录，连续天数起来。"""
     client, _, _ = make_user()
     quest = client.get("/api/quests").json()[0]
 
@@ -142,7 +122,6 @@ def test_quest_check_counts_as_activity(make_user):
 
 
 def test_quest_check_is_idempotent(make_user):
-    """重复打勾只记一条活动，不会把热力图刷爆。"""
     client, _, _ = make_user()
     quest = client.get("/api/quests").json()[0]
 
@@ -159,7 +138,6 @@ def test_quest_check_is_idempotent(make_user):
 
 
 def test_deleting_a_checked_quest_keeps_that_days_activity(make_user):
-    """删掉打过勾的计划，当天的活动不该跟着消失。"""
     client, _, _ = make_user()
     quest = client.get("/api/quests").json()[0]
     client.post(f"/api/quests/{quest['id']}/check", json={"completed": True})
@@ -182,7 +160,6 @@ def test_cannot_check_another_users_quest(make_user):
 
 
 def test_quest_metrics_match_daily_stats_keys(make_user):
-    """计划的可选口径必须和 daily_stats 的返回键一致，否则进度永远是 0。"""
     client, _, _ = make_user()
     metrics = client.get("/api/quests/metrics").json()
 
@@ -244,11 +221,7 @@ def test_cannot_touch_another_users_quest(make_user):
         f"/api/quests/{quest_id}", json={"target": 99}
     ).status_code in (403, 404)
     assert other.delete(f"/api/quests/{quest_id}").status_code in (403, 404)
-    # 原主人还能看到
     assert any(q["id"] == quest_id for q in owner.get("/api/quests").json())
-
-
-# ------------------------------------------------------------------ 打卡与排行
 
 
 def test_heatmap_returns_contiguous_days(make_user):
@@ -276,7 +249,6 @@ def test_leaderboard_chart_and_list_share_data(make_user):
     board = client.get("/api/stats/leaderboard?metric=xp").json()
 
     assert len(board["bars"]) == len(board["entries"])
-    # 服务层返回前 limit 名，如果自己不在其中会额外补一条，所以上限是 limit + 1
     assert 0 < len(board["bars"]) <= 21
     assert len({b["user_id"] for b in board["bars"]}) == len(board["bars"])
     assert [e["rank"] for e in board["entries"]] == list(
@@ -285,7 +257,6 @@ def test_leaderboard_chart_and_list_share_data(make_user):
     values = [b["value"] for b in board["bars"]]
     assert values == sorted(values, reverse=True)
     assert all("level" in e and "streak" in e for e in board["entries"])
-    # 自己必须被标出来，前端靠它高亮
     assert sum(1 for e in board["entries"] if e["is_me"]) == 1
     assert any(e["user_id"] == user_id for e in board["entries"])
 
@@ -322,9 +293,6 @@ def test_user_stats_expose_profile_fields(make_user):
     assert client.get("/api/stats/users/999999").status_code == 404
 
 
-# ------------------------------------------------------------------ 好友
-
-
 def test_friend_request_and_accept_flow(make_user):
     me, my_id, _ = make_user("me")
     peer, peer_id, _ = make_user("pe")
@@ -356,7 +324,6 @@ def test_friend_request_and_accept_flow(make_user):
     peer_friends = peer.get("/api/friends").json()
     assert [f["user_id"] for f in my_friends] == [peer_id]
     assert [f["user_id"] for f in peer_friends] == [my_id]
-    # 自己的列表里绝不能出现自己
     assert all(f["user_id"] != my_id for f in my_friends)
 
 
@@ -394,11 +361,7 @@ def test_unfriend_blocks_chat(make_user):
     assert me.get(f"/api/chat/{peer_id}").status_code == 403
 
 
-# ------------------------------------------------------------------ 私信
-
-
 def _become_friends(a, b, b_id):
-    """a 向 b 发申请，b 通过。"""
     a.post(f"/api/friends/{b_id}")
     friendship_id = b.get("/api/friends/requests").json()["incoming"][0][
         "friendship_id"
@@ -426,7 +389,6 @@ def test_friends_can_exchange_messages(make_user):
     threads = peer.get("/api/chat/threads").json()
     assert len(threads) == 1
     assert threads[0]["user_id"] == my_id
-    # 会话列表显示的是最新一条，不是第一条
     assert threads[0]["last_message"] == "好啊，明天开始"
     assert isinstance(peer.get("/api/chat/unread").json()["unread"], int)
 
@@ -443,7 +405,6 @@ def test_strangers_cannot_chat(make_user):
 
 
 def test_blank_message_is_rejected(make_user):
-    """只有空白的消息不该存进库，也不能算一条聊天记录。"""
     me, _, _ = make_user("me")
     peer, peer_id, _ = make_user("pe")
     _become_friends(me, peer, peer_id)
@@ -471,9 +432,6 @@ def test_blank_post_and_comment_are_rejected(make_user):
     ).status_code == 422
 
 
-# ------------------------------------------------------------------ 论坛
-
-
 def test_post_lifecycle_and_owner_permissions(make_user):
     author, _, _ = make_user("au")
     other, _, _ = make_user("ot")
@@ -492,19 +450,16 @@ def test_post_lifecycle_and_owner_permissions(make_user):
     assert post["tags"] == ["经验", "口语"]
     assert post["is_mine"] is True
     assert "# 我的方法" in post["content"]
-    # 列表摘要要去掉 markdown 记号，避免卡片里出现 ** 和裸链接
     assert "**" not in post["summary"]
     assert "https" not in post["summary"]
 
     assert author.get("/api/forum/posts").json()
     listed = author.get("/api/forum/posts").json()
     assert any(p["id"] == post_id for p in listed["items"])
-    # 列表是分页响应，total 用于「加载更多」
     assert listed["total"] >= 1
     assert listed["offset"] == 0
     assert isinstance(listed["has_more"], bool)
 
-    # 别人不能改、不能删
     assert other.patch(
         f"/api/forum/posts/{post_id}", json={"title": "改个名"}
     ).status_code == 403
@@ -542,16 +497,12 @@ def test_like_and_comment_counts(make_user):
     detail = author.get(f"/api/forum/posts/{post_id}").json()
     assert detail["like_count"] == 1
     assert detail["comment_count"] == 1
-    # 作者看自己的帖子不计阅读量，避免刷数据
     assert detail["view_count"] == 0
-    # 别人打开才算一次阅读
     reader.get(f"/api/forum/posts/{post_id}")
     assert author.get(f"/api/forum/posts/{post_id}").json()["view_count"] == 1
-    # 作者看别人的评论，is_mine 应为 False
     assert author.get(f"/api/forum/posts/{post_id}/comments").json()[0][
         "is_mine"
     ] is False
-    # 点赞者自己看，liked 应为 True
     assert reader.get(f"/api/forum/posts/{post_id}").json()["liked"] is True
 
 
@@ -568,7 +519,6 @@ def test_forum_search_and_tag_filter(make_user):
     assert post_id in ids("?q=雅思")
     assert post_id in ids("?tag=雅思")
     assert post_id not in ids("?q=zzzzzz")
-    # 标签是精确匹配，"雅思" 不该命中 "雅思口语"
     assert post_id not in ids("?tag=雅思口语")
 
 
@@ -586,7 +536,6 @@ def test_only_admin_can_pin(make_user, make_admin):
 
     ordered = admin.get("/api/forum/posts").json()["items"]
     index = next(i for i, p in enumerate(ordered) if p["id"] == post_id)
-    # 它前面只能有别置顶帖，不能夹着普通帖
     assert all(p["is_pinned"] for p in ordered[:index])
 
 
@@ -634,7 +583,6 @@ def test_forum_list_paginates_and_reports_total(make_user):
     second = client.get("/api/forum/posts?tag=分页&limit=2&offset=2").json()
     assert len(second["items"]) == 1
     assert second["has_more"] is False
-    # 两页不重叠
     first_ids = {p["id"] for p in first["items"]}
     second_ids = {p["id"] for p in second["items"]}
     assert first_ids.isdisjoint(second_ids)
@@ -654,7 +602,6 @@ def test_forum_list_supports_sort_modes(make_user):
         "/api/forum/posts", json={"title": "讨论热烈", "content": "正文", "tags": []}
     ).json()["id"]
 
-    # 点赞是开关，同一个人点两次会取消，所以要两个不同的人各点一次
     reader.post(f"/api/forum/posts/{hot}/like")
     other, _, _ = make_user("ot")
     other.post(f"/api/forum/posts/{hot}/like")
@@ -667,19 +614,15 @@ def test_forum_list_supports_sort_modes(make_user):
             for p in client.get(f"/api/forum/posts?sort={sort}&limit=50").json()["items"]
         ]
 
-    # 测试库是 session 级共享的，别的用例也留了帖子，所以只比较这三篇的相对顺序，
-    # 不能断言它们一定排在全站第一。
     hot_order = ids("hot")
     assert hot_order.index(hot) < hot_order.index(quiet)
 
     active_order = ids("active")
     assert active_order.index(discussed) < active_order.index(quiet)
 
-    # 最新排序按创建时间倒序，最后发的排最前
     new_order = ids("new")
     assert new_order.index(discussed) < new_order.index(quiet)
     assert quiet in new_order
-    # 非法 sort 回退到最新，不应该报错
     assert client.get("/api/forum/posts?sort=nonsense").status_code == 200
 
 

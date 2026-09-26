@@ -1,9 +1,3 @@
-"""把当前模型补到已有库：建缺失的表，给已有表加缺失的列。
-
-`create_all` 不会改已存在的表。开发启动、seed 和 Alembic 升级都走这里，
-避免 SQLite 和 Postgres 各写一份加法变更。
-"""
-
 from __future__ import annotations
 
 import logging
@@ -52,7 +46,6 @@ def _execute_on_connection(bind: Bind, statements: list[str]) -> None:
 
 
 def sync_missing_columns(bind: Bind, metadata: MetaData) -> list[str]:
-    """给已存在但缺列的表补上 ALTER TABLE，返回实际执行的语句。"""
     inspector = inspect(bind)
     existing_tables = set(inspector.get_table_names())
     applied: list[str] = []
@@ -83,15 +76,49 @@ def sync_missing_columns(bind: Bind, metadata: MetaData) -> list[str]:
     return applied
 
 
-def sync_sqlite_columns(engine: Bind, metadata: MetaData) -> list[str]:
-    """兼容旧入口。"""
-    return sync_missing_columns(engine, metadata)
+def drop_orphan_columns(bind: Bind, metadata: MetaData) -> list[str]:
+    inspector = inspect(bind)
+    existing_tables = set(inspector.get_table_names())
+    dropped: list[str] = []
+    preparer = bind.dialect.identifier_preparer
+
+    for table in metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+
+        model_columns = {column.name for column in table.columns}
+        for column in inspector.get_columns(table.name):
+            name = column["name"]
+            if name in model_columns:
+                continue
+
+            # 模型里删掉的字段会以 NOT NULL 列留在老库里，插入新行时缺值会报
+            # IntegrityError，所以启动时顺手清掉。
+            ddl = (
+                f"ALTER TABLE {preparer.quote(table.name)} "
+                f"DROP COLUMN {preparer.quote(name)}"
+            )
+            try:
+                _execute_on_connection(bind, [ddl])
+            except Exception as exc:  # noqa: BLE001 - 删不掉就保留，不影响启动
+                logger.warning(
+                    "schema 同步：旧列 %s.%s 删除失败，已保留（%s）",
+                    table.name,
+                    name,
+                    exc,
+                )
+                continue
+            dropped.append(ddl)
+
+    if dropped:
+        logger.info("schema 同步：清理了 %d 个旧列", len(dropped))
+    return dropped
 
 
 def apply_schema(bind: Bind) -> None:
-    """建齐当前模型对应的表，并给旧表补上缺失列。"""
     from app.core.database import Base
     import app.models  # noqa: F401
 
     Base.metadata.create_all(bind=bind)
     sync_missing_columns(bind, Base.metadata)
+    drop_orphan_columns(bind, Base.metadata)

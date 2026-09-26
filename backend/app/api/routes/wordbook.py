@@ -1,4 +1,3 @@
-"""词书 / 单词卡 / 每日任务 / 排行榜 路由。"""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,7 +19,6 @@ class ReviewIn(BaseModel):
 
 class QuizStartIn(BaseModel):
     count: int = Field(default=10, ge=1, le=100)
-    # fresh=重新抽题；resume=接着上次没答完的题继续
     mode: str = Field(default="fresh", pattern="^(fresh|resume)$")
 
 
@@ -31,22 +29,14 @@ class QuizAnswerIn(BaseModel):
 
 class StudyAnswerIn(BaseModel):
     action: str = Field(pattern="^(forget|remember|mastered)$")
-    mode: str | None = Field(default=None, pattern="^(new|review)$")
     book: str | None = None
 
 
 class DailyTaskIn(BaseModel):
     target_words: int | None = Field(default=None, ge=1, le=300)
-    target_new_words: int | None = Field(default=None, ge=0, le=200)
-    target_review_words: int | None = Field(default=None, ge=0, le=300)
     target_scenarios: int | None = Field(default=None, ge=0, le=20)
     target_articles: int | None = Field(default=None, ge=0, le=20)
     target_minutes: int | None = Field(default=None, ge=1, le=600)
-
-
-# ---------------------------------------------------------------------------
-# 词书
-# ---------------------------------------------------------------------------
 
 
 @router.get("/wordbooks")
@@ -77,11 +67,6 @@ def list_book_words(
     )
 
 
-# ---------------------------------------------------------------------------
-# 单词卡
-# ---------------------------------------------------------------------------
-
-
 @router.get("/cards")
 def list_cards(
     book: str | None = None,
@@ -103,11 +88,6 @@ def list_cards(
         keyword=keyword,
         only_my=only_my,
     )
-
-
-# ---------------------------------------------------------------------------
-# 我的单词本：随机测验 / 移除单词
-# ---------------------------------------------------------------------------
 
 
 @router.get("/quiz")
@@ -206,11 +186,6 @@ def review_word(
     return data
 
 
-# ---------------------------------------------------------------------------
-# 背单词流程：新学 / 复习
-# ---------------------------------------------------------------------------
-
-
 @router.get("/study/summary")
 def study_summary(
     book: str | None = None,
@@ -224,13 +199,12 @@ def study_summary(
 
 @router.get("/study/queue")
 def study_queue(
-    mode: str = Query("new", pattern="^(new|review)$"),
     book: str | None = None,
     limit: int | None = Query(None, ge=1, le=100),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    return wordbook_service.study_queue(db, user, mode=mode, book=book, limit=limit)
+    return wordbook_service.study_queue(db, user, book=book, limit=limit)
 
 
 @router.post("/word/{word_id}/study")
@@ -244,7 +218,7 @@ def study_answer(
     if word is None:
         raise HTTPException(status_code=404, detail="单词不存在")
     data = wordbook_service.apply_study_answer(
-        db, user, word, payload.action, mode=payload.mode, book_code=payload.book or ""
+        db, user, word, payload.action, book_code=payload.book or ""
     )
     db.commit()
     return data
@@ -256,11 +230,6 @@ def word_audio(word: str, accent: str = "us"):
     if path is None:
         raise HTTPException(status_code=404, detail="该单词暂无音频，请使用浏览器朗读")
     return FileResponse(path, media_type="audio/mpeg", filename=path.name)
-
-
-# ---------------------------------------------------------------------------
-# 每日任务
-# ---------------------------------------------------------------------------
 
 
 @router.get("/daily-task")
@@ -281,8 +250,6 @@ def update_daily_task(
     task = wordbook_service.get_or_create_daily_task(db, user)
     for field in (
         "target_words",
-        "target_new_words",
-        "target_review_words",
         "target_scenarios",
         "target_articles",
         "target_minutes",
@@ -290,20 +257,10 @@ def update_daily_task(
         value = getattr(payload, field)
         if value is not None:
             setattr(task, field, value)
-    # 只改新学/复习目标时，总目标跟着走，保证「背单词」子项能正常结算
-    if payload.target_words is None and (
-        payload.target_new_words is not None or payload.target_review_words is not None
-    ):
-        task.target_words = task.target_new_words + task.target_review_words
     db.flush()
     wordbook_service.settle_daily_task(db, task)
     db.commit()
     return wordbook_service.serialize_daily_task(task)
-
-
-# ---------------------------------------------------------------------------
-# 排行榜
-# ---------------------------------------------------------------------------
 
 
 @router.get("/leaderboard")

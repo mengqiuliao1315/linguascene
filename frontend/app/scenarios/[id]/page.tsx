@@ -15,7 +15,7 @@ function ScenarioDetail() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [scenario, setScenario] = useState<Scenario | null>(null);
-  /** 这个场景上一次的对话记录；有它就先问「继续 / 重新开始」，不默默再开一个。 */
+
   const [existing, setExisting] = useState<ConversationSummary | null>(null);
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -28,7 +28,6 @@ function ScenarioDetail() {
       .catch((err) => setError(err instanceof Error ? err.message : "加载失败"));
   }, [params.id]);
 
-  // 历史列表已经按场景去重（同场景只留最近一次），这里直接找那一条即可。
   useEffect(() => {
     api
       .conversations()
@@ -40,9 +39,6 @@ function ScenarioDetail() {
       .catch(() => setExisting(null));
   }, [params.id]);
 
-  // 用户在这一页读完说明多半就会点「开始对话」，紧接着听到的就是这句开场白。
-  // 内置场景的音频是项目里的静态文件，这里直接按文件地址取回来（顺带也让浏览器
-  // 缓存住它），进对话页时就是即时出声。
   useEffect(() => {
     if (!scenario?.opening_line) return;
     warmSpeechBackend();
@@ -54,7 +50,7 @@ function ScenarioDetail() {
 
   async function handleStart() {
     if (!scenario) return;
-    // 之前聊过这个场景：先让用户挑接着聊还是重开，别默默又开一个
+
     if (existing) {
       setChoiceOpen(true);
       return;

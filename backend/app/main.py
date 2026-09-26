@@ -32,7 +32,6 @@ from app.api.routes import (
 from app.core.config import settings
 from app.core.cache import get_cache
 from app.core.database import SessionLocal, engine
-from app.core.db_migrate import migrate_legacy_ai_config
 from app.core.schema_sync import apply_schema
 from app.core.storage import get_storage
 from app.services import conversation_service
@@ -59,7 +58,6 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """统一错误响应，避免把堆栈暴露给前端。"""
     logger.exception("未处理的异常：%s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "服务器内部错误"})
 
@@ -67,25 +65,16 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 @app.on_event("startup")
 def on_startup() -> None:
     if settings.auto_create_tables:
-        # 开发便捷路径；生产环境应使用 `alembic upgrade head`
         apply_schema(engine)
-        migrate_legacy_ai_config(engine)
         logger.info("数据库表已就绪（%s）", settings.database_url)
 
     get_cache()
     get_storage()
     prewarm_speech()
-    # 本地语音识别模型：第一次用要下载（几十秒），放到后台先加载好
     local_asr.warm_up()
 
 
 def prewarm_speech() -> None:
-    """把常驻的固定台词先合成好，用户点开对话就能直接出声。
-
-    场景开场白与自由对话的开场句都是内置文本、全站共用同一份音频：启动时
-    预热一次，之后每次朗读都是磁盘缓存命中（毫秒级），不必再等 1~2 秒的
-    「建连 + 合成」。跑在后台线程里，不拖慢启动。
-    """
     if not settings.speech_prewarm or not audio_service.tts_available():
         return
 

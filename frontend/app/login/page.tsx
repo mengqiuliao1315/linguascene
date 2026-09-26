@@ -1,7 +1,3 @@
-/**
- * 登录页。内部站点不开放注册，账号由管理员创建后分发。
- */
-
 "use client";
 
 import { useState } from "react";

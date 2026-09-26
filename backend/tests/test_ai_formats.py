@@ -1,8 +1,3 @@
-"""多 API 格式接入：地址归一化、请求构造、响应解析、模型列表、接口行为。
-
-全部用 httpx.MockTransport 拦截，不发起真实网络请求。
-"""
-
 import json
 from urllib.parse import urlparse
 
@@ -29,9 +24,6 @@ def _provider(handler, **kwargs) -> P.HttpAIProvider:
         transport=transport,
         **kwargs,
     )
-
-
-# ------------------------------------------------------------------ 地址归一化
 
 
 @pytest.mark.parametrize(
@@ -93,9 +85,6 @@ def test_unknown_format_rejected():
         P.HttpAIProvider(base_url="https://x.com", api_key="k", model="m", api_format="nope")
 
 
-# ------------------------------------------------------------------ 请求构造与解析
-
-
 def test_openai_chat_request_and_parse():
     seen: dict = {}
 
@@ -119,10 +108,8 @@ def test_openai_chat_request_and_parse():
     assert seen["url"] == "https://api.example.com/v1/chat/completions"
     assert seen["auth"] == "Bearer sk-test"
     assert seen["body"]["response_format"] == {"type": "json_object"}
-    # 输出上限必须带上，否则跑题的模型能把一轮对话拖到超时
     assert seen["body"]["max_tokens"] == settings.ai_max_tokens
     assert seen["body"]["messages"][0]["role"] == "system"
-    # schema 必须被替换进系统提示
     assert '"properties"' in seen["body"]["messages"][0]["content"]
 
 
@@ -197,7 +184,6 @@ def test_gemini_request_and_parse():
     )
     out = provider.complete_json("sys {schema}", "user", Answer)
 
-    # 模型名里的 models/ 前缀不能重复拼进 URL；key 走 query 参数
     assert urlparse(seen["url"]).path == (
         "/v1beta/models/gemini-1.5-flash:generateContent"
     )
@@ -260,7 +246,6 @@ def test_retries_without_json_mode_on_failure():
 
 
 def test_retries_with_max_completion_tokens_when_max_tokens_rejected():
-    """新版 OpenAI 模型只认 max_completion_tokens：被点名时自动换写法重试。"""
     calls: list[dict] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -279,7 +264,6 @@ def test_retries_with_max_completion_tokens_when_max_tokens_rejected():
     out = provider.complete_json("s {schema}", "u", Answer)
 
     assert calls[0]["max_tokens"] == settings.ai_max_tokens
-    # 前两次都带 max_tokens 被拒，最后一次换成 max_completion_tokens 才成功
     assert calls[-1].get("max_completion_tokens") == settings.ai_max_tokens
     assert "max_tokens" not in calls[-1]
     assert out["word"] == "z"
@@ -296,7 +280,6 @@ def test_http_error_message_includes_status():
 
 
 def test_complete_json_retries_transient_network_error(monkeypatch):
-    """网络抖动不该把整轮调用打死：连接被拒一次后自愈。"""
     monkeypatch.setattr(P, "COMPLETE_RETRY_DELAY", 0)
     calls: list[int] = []
 
@@ -316,7 +299,6 @@ def test_complete_json_retries_transient_network_error(monkeypatch):
 
 
 def test_complete_json_retries_rate_limit_429(monkeypatch):
-    """429 限流是临时的：免费额度的服务商很常见，应自动重试而不是报错。"""
     monkeypatch.setattr(P, "COMPLETE_RETRY_DELAY", 0)
     calls: list[int] = []
 
@@ -336,7 +318,6 @@ def test_complete_json_retries_rate_limit_429(monkeypatch):
 
 
 def test_complete_json_retries_invalid_model_json(monkeypatch):
-    """模型偶尔返回非法 JSON：temperature>0，再采样一次通常就好了。"""
     monkeypatch.setattr(P, "COMPLETE_RETRY_DELAY", 0)
     calls: list[int] = []
 
@@ -358,11 +339,6 @@ def test_complete_json_retries_invalid_model_json(monkeypatch):
 
 
 def test_complete_json_does_not_retry_auth_error(monkeypatch):
-    """鉴权错误是确定性的：不浪费重试预算原地重试。
-
-    openai 格式有 json_mode / 纯文本两种请求体，各试一次即止（不带
-    response_format 的写法有可能成功）；同一个 payload 绝不打第二遍。
-    """
     monkeypatch.setattr(P, "COMPLETE_RETRY_DELAY", 0)
     calls: list[dict] = []
 
@@ -395,9 +371,6 @@ def test_signature_separates_formats_and_keys():
     )
     assert a.signature != b.signature
     assert a.signature != c.signature
-
-
-# ------------------------------------------------------------------ 模型列表
 
 
 def test_list_models_openai():
@@ -466,9 +439,6 @@ def test_list_models_error_surfaces():
 def test_list_models_requires_key():
     with pytest.raises(P.AIProviderError):
         P.list_models(base_url="https://api.example.com", api_key="")
-
-
-# ------------------------------------------------------------------ 接口行为
 
 
 def test_models_endpoint_requires_auth(client):
@@ -553,15 +523,7 @@ def test_models_endpoint_reports_provider_error(auth_client, monkeypatch):
     assert "401" in body["message"]
 
 
-# ------------------------------------------------------------------ 测试连接（探活）
-
-
 def test_probe_succeeds_on_plain_text_reply():
-    """探活只验证「地址 + Key + 模型名」能不能走通，不看模型答了什么。
-
-    回归：早先探活要求模型按业务 Schema 返回 JSON，模型偶尔会把 Schema 本身
-    回显回来，于是「信息都填对了却随机报错」。这里返回一段纯文本也必须算成功。
-    """
     seen: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -575,7 +537,6 @@ def test_probe_succeeds_on_plain_text_reply():
 
     assert ok is True
     assert "test-model" in message
-    # 探活请求要尽量小：不带 response_format / temperature，也不带 system 提示
     assert "response_format" not in seen["body"]
     assert "temperature" not in seen["body"]
     assert seen["body"]["max_tokens"] == P.PROBE_MAX_TOKENS
@@ -583,7 +544,6 @@ def test_probe_succeeds_on_plain_text_reply():
 
 
 def test_probe_succeeds_when_model_echoes_schema():
-    """模型把 JSON Schema 回显回来时，探活不该判失败（历史 bug 的直接回归）。"""
     echoed = {
         "properties": {"word": {"title": "Word", "type": "string"}},
         "cefr_level": "A1",
@@ -609,7 +569,6 @@ def test_probe_reports_invalid_key():
     assert ok is False
     assert "401" in message
     assert "API Key" in message
-    # 服务商自己的说明要带出来，方便定位
     assert "Invalid token" in message
 
 
@@ -625,7 +584,6 @@ def test_probe_reports_unknown_model():
 
 
 def test_probe_retries_transient_server_error():
-    """服务端 5xx 是临时的，应当自动重试而不是直接把失败甩给用户。"""
     calls: list[int] = []
 
     def handler(_request: httpx.Request) -> httpx.Response:
@@ -643,7 +601,6 @@ def test_probe_retries_transient_server_error():
 
 
 def test_probe_does_not_retry_auth_error():
-    """鉴权类错误重试没有意义，只发一次，省得白等。"""
     calls: list[int] = []
 
     def handler(_request: httpx.Request) -> httpx.Response:
@@ -711,7 +668,6 @@ def test_probe_requires_key_and_base_url():
 
 
 def test_probe_endpoint_reports_success(auth_client, monkeypatch):
-    """接口层：探活成功/失败都要以 200 + success 字段返回，而不是抛异常。"""
     from app.services import ai_config_service
 
     monkeypatch.setattr(
@@ -755,30 +711,21 @@ def test_probe_endpoint_surfaces_failure_message(auth_client, monkeypatch):
     assert "401" in body["message"]
 
 
-# ------------------------------------------- 填错/填对却被判失败的地址与超时
-
-
 @pytest.mark.parametrize(
     "raw",
     [
-        "http://[::1/v1",  # 方括号没配对，urlparse 直接抛 ValueError
-        "https://",  # 只有协议没有域名
-        "https://api.deepseek.com /v1",  # 复制时带进了空格
+        "http://[::1/v1",
+        "https://",
+        "https://api.deepseek.com /v1",
         "https:// api.deepseek.com/v1",
     ],
 )
 def test_normalize_rejects_unusable_url(raw):
-    """填坏的地址要在归一化这一步就说清楚。
-
-    回归：`http://[::1/v1` 以前会一路抛到接口层变成 500「服务器内部错误」，
-    `https://` 则报一句英文的 URL 缺协议，用户根本不知道要改哪里。
-    """
     with pytest.raises(P.AIProviderError):
         P.normalize_base_url(raw)
 
 
 def test_probe_endpoint_reports_bad_base_url(auth_client):
-    """接口层：坏地址返回 200 + 可读说明，而不是 500。"""
     resp = auth_client.post(
         "/api/ai-settings/test",
         json={
@@ -796,10 +743,6 @@ def test_probe_endpoint_reports_bad_base_url(auth_client):
 
 
 def test_probe_timeout_reports_warn_when_credentials_are_ok(monkeypatch):
-    """思考型模型回一个 ping 要好几十秒：那是「慢」，不是「信息填错了」。
-
-    回归：读超时曾被当成失败，于是「信息都填对了却一直报错、要多试几次」。
-    """
     monkeypatch.setattr(P, "PROBE_RETRY_DELAY", 0)
     monkeypatch.setattr(P, "_credential_status", lambda **_kw: "ok")
 
@@ -814,7 +757,6 @@ def test_probe_timeout_reports_warn_when_credentials_are_ok(monkeypatch):
 
 
 def test_probe_timeout_with_bad_key_is_still_a_failure(monkeypatch):
-    """但超时后如果 /models 明确说 Key 不对，就不该给绿色。"""
     monkeypatch.setattr(P, "PROBE_RETRY_DELAY", 0)
     monkeypatch.setattr(P, "_credential_status", lambda **_kw: "invalid")
 
@@ -829,11 +771,6 @@ def test_probe_timeout_with_bad_key_is_still_a_failure(monkeypatch):
 
 
 def test_probe_suggests_real_models_when_model_name_is_rejected(monkeypatch):
-    """模型名被服务商否掉时，顺手把这条地址下真实存在的模型名带上。
-
-    预设里的默认模型名会随服务商下架而过时（返回 400 Model does not exist），
-    用户对着「多半是模型名写错了」只能瞎猜——这里直接给出可用清单。
-    """
     monkeypatch.setattr(P, "PROBE_RETRY_DELAY", 0)
     monkeypatch.setattr(
         P, "list_models", lambda **_kw: ["deepseek-chat", "Qwen/Qwen3-8B"]
@@ -853,11 +790,6 @@ def test_probe_suggests_real_models_when_model_name_is_rejected(monkeypatch):
 
 
 def test_complete_json_waits_out_retry_after(monkeypatch):
-    """429 带着 Retry-After 时要等够，不能固定半秒就重试。
-
-    免费额度的服务商（硅基流动等）限流往往要等好几秒，三次固定半秒的重试
-    全是白试，最后整轮对话被打回离线规则引擎，看着就是「AI 时好时坏」。
-    """
     sleeps: list[float] = []
     monkeypatch.setattr(P.time, "sleep", sleeps.append)
     calls: list[int] = []
@@ -881,11 +813,6 @@ def test_complete_json_waits_out_retry_after(monkeypatch):
 
 
 def test_chat_like_models_skips_embeddings_and_rerankers():
-    """失败提示里推荐的模型必须是能聊天的。
-
-    回归：硅基流动的模型列表按字母序排，前五个全是 BAAI/bge-* 向量模型，
-    直接列表头推荐等于把用户往沟里带。
-    """
     models = [
         "BAAI/bge-large-en-v1.5",
         "BAAI/bge-reranker-v2-m3",
@@ -899,18 +826,12 @@ def test_chat_like_models_skips_embeddings_and_rerankers():
     assert "BAAI/bge-large-en-v1.5" not in picked
     assert "BAAI/bge-reranker-v2-m3" not in picked
     assert "FunAudioLLM/SenseVoiceSmall" not in picked
-    # 常见对话模型排前面，其余能聊的跟在后面
     assert picked[:2] == ["deepseek-ai/DeepSeek-V4-Flash", "Qwen/Qwen3.8-27B"]
     assert picked[-1] == "acme/coder-7b"
     assert len(P._chat_like_models(models, 3)) == 3
 
 
 def test_models_endpoint_lists_chat_models_first(auth_client, monkeypatch):
-    """拉模型列表是给人挑对话模型的，别让向量/语音模型堵在最前面。
-
-    回归：硅基流动按字母序返回，前八个全是 BAAI/bge-*、FunAudioLLM/*
-    这些不能聊天的模型，用户得自己往下翻。
-    """
     from app.services import ai_config_service
 
     monkeypatch.setattr(
@@ -927,7 +848,6 @@ def test_models_endpoint_lists_chat_models_first(auth_client, monkeypatch):
         },
     )
     assert resp.status_code == 200
-    # 能聊天的排前面，其余一个不丢
     assert resp.json()["models"] == [
         "Qwen/Qwen3.8-27B",
         "BAAI/bge-m3",

@@ -1,9 +1,3 @@
-"""缓存抽象。
-
-默认使用进程内 TTL 缓存，零依赖即可运行；设置 CACHE_BACKEND=redis 后
-自动切换到 Redis。用于缓存单词释义、文章分析等昂贵且可复用的 AI 结果。
-"""
-
 import json
 import logging
 import threading
@@ -47,7 +41,6 @@ class InMemoryCache(CacheBackend):
     def set(self, key: str, value: Any, ttl_seconds: int = 86400) -> None:
         with self._lock:
             if len(self._data) >= self._max_items:
-                # 简单的容量淘汰：清掉最早过期的 10%
                 ordered = sorted(self._data.items(), key=lambda kv: kv[1][0])
                 for k, _ in ordered[: max(1, self._max_items // 10)]:
                     self._data.pop(k, None)
@@ -60,7 +53,7 @@ class InMemoryCache(CacheBackend):
 
 class RedisCache(CacheBackend):  # pragma: no cover - 需要真实 Redis
     def __init__(self, url: str) -> None:
-        import redis  # 延迟导入，未安装时不影响内存缓存路径
+        import redis
 
         self._client = redis.Redis.from_url(url, decode_responses=True)
 
@@ -106,6 +99,5 @@ def cache_key(*parts: str) -> str:
 
 
 def reset_cache() -> None:
-    """测试用：丢掉已选中的缓存后端。"""
     global _cache
     _cache = None

@@ -45,7 +45,6 @@ def test_upload_rejects_empty_content(auth_client):
 
 
 def test_upload_text_only(auth_client):
-    """没有文件时，直接提交 text 表单字段也能创建内容。"""
     response = auth_client.post(
         "/api/content/upload",
         data={

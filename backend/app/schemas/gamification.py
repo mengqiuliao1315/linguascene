@@ -39,13 +39,11 @@ class AchievementOut(BaseModel):
     icon: str
     unlocked: bool
     unlocked_at: datetime | None = None
-    # 未解锁时用于展示进度；已解锁时为 target
     progress: int = 0
     target: int = 0
 
 
 class AchievementAck(BaseModel):
-    """前端弹完解锁提示后回传的成就 code 列表。"""
 
     codes: list[str] = []
 
@@ -60,7 +58,6 @@ class DailyQuestOut(BaseModel):
 
 
 class ThemeOut(BaseModel):
-    """可切换的皮肤。皮肤免费，没有价格与拥有状态。"""
 
     code: str
     name: str

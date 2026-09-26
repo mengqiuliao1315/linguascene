@@ -4,20 +4,15 @@ import uuid
 
 import pytest
 
-# 测试使用独立 SQLite 文件与内存缓存，避免污染开发库
 _TMP_DB = os.path.join(tempfile.mkdtemp(prefix="linguascene-test-"), "test.db")
 os.environ["DATABASE_URL"] = f"sqlite:///{_TMP_DB}"
 os.environ["CACHE_BACKEND"] = "memory"
 os.environ["AI_PROVIDER"] = "mock"
-# 测试里开放自助注册，便于批量造普通用户；生产默认关闭（见 config.py）。
 os.environ["ALLOW_PUBLIC_REGISTRATION"] = "true"
-# 固定管理员凭据，供 admin_client 登录
 os.environ["ADMIN_USERNAME"] = "admin"
 os.environ["ADMIN_EMAIL"] = "admin@linguascene.app"
 os.environ["ADMIN_PASSWORD"] = "admin12345"
-# 关掉开场白语音预热：测试不该去连语音服务，也不该为每个用例拉起一串线程
 os.environ["SPEECH_PREWARM"] = "false"
-# 关掉服务端本地语音识别：模型要下载几百 MB，测试里既慢又没必要
 os.environ["LOCAL_ASR"] = "false"
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -56,10 +51,6 @@ def _register(client: TestClient, username: str, email: str, password: str) -> s
 
 @pytest.fixture
 def auth_client(client):
-    """已登录的普通用户。
-
-    每次调用都用唯一后缀，避免同一会话内重复注册同名账号。
-    """
     suffix = uuid.uuid4().hex[:8]
     token = _register(
         client, f"tester{suffix}", f"tester{suffix}@example.com", "tester12345"
@@ -70,7 +61,6 @@ def auth_client(client):
 
 @pytest.fixture
 def admin_user(client):
-    """种子数据里的管理员账号，用于断言不能自删/自降级。"""
     from sqlalchemy import select
 
     from app.core.config import settings
@@ -88,7 +78,6 @@ def admin_user(client):
 
 @pytest.fixture
 def admin_client(client):
-    """已登录的管理员客户端。"""
     from app.core.config import settings
 
     response = client.post(

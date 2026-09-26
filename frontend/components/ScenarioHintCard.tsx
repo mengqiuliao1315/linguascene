@@ -4,13 +4,6 @@ import { useState } from "react";
 
 import type { ScenarioHint } from "@/lib/types";
 
-/**
- * 输入区上方的中文脚手架。
- *
- * 显示下一步该做什么、可以让用户照着翻译的中文句。
- * 英文参考默认藏起来，点眼睛才显示，避免用户直接抄而跳过自己翻译。
- * 默认展开，用户觉得不需要了可以收起。
- */
 export function ScenarioHintCard({
   hint,
   onFill,

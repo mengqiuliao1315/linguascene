@@ -1,5 +1,3 @@
-"""论坛：经验帖、点赞、评论。"""
-
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -130,7 +128,6 @@ def get_post(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> PostDetailOut:
-    # 列表页就地展开正文时传 count_view=false，避免把展开算成一次阅读
     post = social_service.get_post(db, user, post_id, count_view=count_view)
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")

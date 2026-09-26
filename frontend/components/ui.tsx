@@ -1,12 +1,8 @@
-/**
- * 通用 UI 原语。保持无解释文案：界面本身承担说明职责。
- */
 "use client";
 
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 
-/** 居中弹层。点击遮罩或按 Esc 关闭；不做焦点陷阱，够用即可。 */
 export function Modal({
   open,
   onClose,
@@ -65,16 +61,6 @@ export function Modal({
   );
 }
 
-export function Card({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return <div className={`card p-5 ${className}`}>{children}</div>;
-}
-
 export function ProgressBar({
   value,
   className = "",
@@ -130,7 +116,7 @@ export function ScenarioCard({
   level: string;
   minutes: number;
   role: string;
-  /** 鼠标移上来时调一次：给调用方机会先把它那句开场白备好。 */
+
   onHover?: () => void;
 }) {
   return (
@@ -168,10 +154,10 @@ export function Avatar({
   className?: string;
   rounded?: string;
 }) {
-  // 没有头像时退回用户名首字母，保证列表里永远有东西可看
+
   if (avatar) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- 头像是本地 /api 资源，无需 next/image 优化
+
       <img
         src={avatar}
         alt={username}
@@ -224,26 +210,6 @@ export function SectionHeader({
     <div className="mb-3 flex items-center justify-between">
       <h2 className="text-base font-semibold text-slate-900">{title}</h2>
       {action}
-    </div>
-  );
-}
-
-export function StatPill({
-  icon,
-  value,
-  label,
-}: {
-  icon: string;
-  value: ReactNode;
-  label?: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-      <span>{icon}</span>
-      <div className="leading-tight">
-        <p className="text-sm font-semibold text-slate-900">{value}</p>
-        {label ? <p className="text-[11px] text-slate-400">{label}</p> : null}
-      </div>
     </div>
   );
 }

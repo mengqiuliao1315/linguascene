@@ -74,7 +74,6 @@ def update_me(
     if payload.interests is not None:
         user.interests = ",".join(payload.interests)
     if payload.theme:
-        # 皮肤免费但只有内置的那几款，防止写入未知 code 导致前端取不到配色
         if payload.theme not in {t["code"] for t in levels.THEMES}:
             raise HTTPException(status_code=400, detail="皮肤不存在")
         user.theme = payload.theme
@@ -121,7 +120,6 @@ async def upload_avatar(
     db.commit()
     db.refresh(user)
 
-    # 新头像已经落库，再清理旧文件；即便清理失败也不影响本次上传
     if previous and previous != user.avatar:
         delete_avatar(previous)
 

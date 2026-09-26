@@ -1,7 +1,3 @@
-/**
- * 计划、统计、好友、私信、论坛的前端客户端。
- */
-
 import { ApiError, getToken, handleUnauthorized } from "./api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
@@ -15,7 +11,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (handleUnauthorized(response.status)) {
+  if (token && handleUnauthorized(response.status)) {
     throw new ApiError(401, "登录已过期");
   }
   if (!response.ok) {
@@ -23,15 +19,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     try {
       detail = (await response.json()).detail ?? detail;
     } catch {
-      // 非 JSON 响应，保留默认文案
+
     }
     throw new ApiError(response.status, detail);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
-
-// ------------------------------------------------------------------ 类型
 
 export interface Quest {
   id: number | null;
@@ -147,15 +141,6 @@ export interface ChatMessage {
   mine: boolean;
 }
 
-export interface ChatThread {
-  user_id: number;
-  username: string;
-  avatar: string | null;
-  last_message: string;
-  last_at: string | null;
-  unread: number;
-}
-
 export interface ForumAuthor {
   user_id: number;
   username: string;
@@ -206,10 +191,8 @@ export interface ForumComment {
   created_at: string;
 }
 
-// ------------------------------------------------------------------ 接口
-
 export const socialApi = {
-  // 计划
+
   quests: () => request<Quest[]>("/api/quests"),
   questMetrics: () => request<QuestMetric[]>("/api/quests/metrics"),
   createQuest: (payload: {
@@ -223,7 +206,7 @@ export const socialApi = {
     id: number,
     payload: Partial<{ label: string; metric: string; target: number; xp: number; icon: string }>
   ) => request<Quest>(`/api/quests/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  // 完成与否由用户自己打勾，服务端只记「今天这条计划被打了勾」
+
   checkQuest: (id: number, completed: boolean) =>
     request<Quest>(`/api/quests/${id}/check`, {
       method: "POST",
@@ -231,7 +214,6 @@ export const socialApi = {
     }),
   deleteQuest: (id: number) => request<void>(`/api/quests/${id}`, { method: "DELETE" }),
 
-  // 统计
   heatmap: (days = 182) => request<Heatmap>(`/api/stats/heatmap?days=${days}`),
   userHeatmap: (userId: number, days = 182) =>
     request<Heatmap>(`/api/stats/heatmap/${userId}?days=${days}`),
@@ -239,7 +221,6 @@ export const socialApi = {
     request<Leaderboard>(`/api/stats/leaderboard?metric=${metric}`),
   userStats: (userId: number) => request<UserStats>(`/api/stats/users/${userId}`),
 
-  // 好友
   friends: () => request<Friend[]>("/api/friends"),
   friendRequests: () =>
     request<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }>("/api/friends/requests"),
@@ -250,12 +231,7 @@ export const socialApi = {
     request<void>(`/api/friends/requests/${friendshipId}/accept`, { method: "POST" }),
   declineFriend: (friendshipId: number) =>
     request<void>(`/api/friends/requests/${friendshipId}/decline`, { method: "POST" }),
-  removeFriend: (userId: number) =>
-    request<void>(`/api/friends/${userId}`, { method: "DELETE" }),
 
-  // 私信
-  threads: () => request<ChatThread[]>("/api/chat/threads"),
-  unread: () => request<{ unread: number }>("/api/chat/unread"),
   messages: (userId: number) => request<ChatMessage[]>(`/api/chat/${userId}`),
   sendMessage: (userId: number, content: string) =>
     request<ChatMessage>(`/api/chat/${userId}`, {
@@ -263,7 +239,6 @@ export const socialApi = {
       body: JSON.stringify({ content }),
     }),
 
-  // 论坛
   posts: (params?: {
     tag?: string;
     q?: string;
@@ -316,13 +291,6 @@ export const socialApi = {
   },
 };
 
-/**
- * 热力图配色：与全站蓝白基调一致，越活跃越深。
- *
- * level 0 是空白色（slate-100）留给无记录；level 1 必须用 brand-200——
- * brand-100 在白卡片上几乎和空白色一样，只学 1~2 次的日子会看不出有记录。
- * 整体压浅一档（最深处只到 brand-500），比原来的 brand-700 更透气。
- */
 export const HEAT_COLORS = [
   "bg-slate-100",
   "bg-brand-200",

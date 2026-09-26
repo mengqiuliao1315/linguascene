@@ -1,11 +1,3 @@
-/**
- * 划词浮层。
- *
- * 选中原文后在选区上方弹出：一排颜色点直接上色，或者展开写一条笔记。
- * 颜色即语义（生词 / 好句 / 语法 / 疑问 / 待复习），所以选色是主操作，
- * 不该藏在对话框里。
- */
-
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -61,7 +53,6 @@ export function SelectionToolbar({
     };
   }, [onClose]);
 
-  // 选区在屏幕下半部分时浮层放到下方，避免被视口顶出去
   const above = selection.y > 140;
   const viewportWidth =
     typeof window === "undefined" ? 1024 : window.innerWidth;

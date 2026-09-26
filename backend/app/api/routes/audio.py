@@ -26,8 +26,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 
-# 单次录音上限。前端按停顿切段，每段只有几秒，正常远小于这个值；
-# 留这么宽是为了容纳「一口气说完一整段」的长录音。
 MAX_TRANSCRIBE_BYTES = 12 * 1024 * 1024
 
 
@@ -65,29 +63,10 @@ def text_to_speech(
         path,
         media_type="audio/mpeg",
         filename=path.name,
-        # URL 里就带着原文和语言，同一个 URL 永远对应同一段音频，
-        # 所以可以让浏览器长期缓存：再次朗读同一句连请求都不用发。
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
 
 
-# ------------------------------------------------------------ 语音识别（STT）
-#
-# 两条通道，**默认只走第一条**：
-#
-# 1. 用户自己在「AI 模型」页配的那家（OpenAI 兼容的 /audio/transcriptions：
-#    whisper / Qwen3-ASR / SenseVoice 等）——识别费用由用户自己的 Key 承担；
-# 2. 服务端本地识别（faster-whisper，见 services/local_asr.py）——开源模型跑在
-#    这台机器上，不连任何第三方接口、不需要 Key、不产生费用。
-#
-# 曾经还有第三条「浏览器识别」（浏览器的 Web Speech API，在前端完成），已按产品
-# 要求删除：内嵌 webview 里连不上浏览器厂商的识别服务，识别质量也差。
-#
-# 平台不内置任何 API Key，也不替用户换通道：1 走不通时接口如实报错（503/502），
-# 由前端弹窗让用户自己决定换哪条。所以这里的参数是「用户选定的那条」。
-
-# 引擎标识：model = 用户自己在 AI 模型里配的那家；local = 服务端本地识别。
-# 没有 auto：换通道必须是用户点过头的事（前端会弹窗问），后端不替用户做决定。
 ENGINE_MODEL = "model"
 ENGINE_LOCAL = "local"
 
@@ -117,8 +96,6 @@ def stt_capability(
     由前端弹窗让用户选备选通道，而不是替他换。
     """
     status = stt_status(provider)
-    # 格式支持但还没确认这个模型认不认转写：丢到后台用一段静音试一次。
-    # 试出来不认时，下一次探测就会把 available 置回 False，前端据此弹窗。
     if status["available"] and status["reason"] == "":
         threading.Thread(
             target=_probe_stt_model,
@@ -135,7 +112,6 @@ def stt_capability(
 
 
 def _probe_stt_model(provider) -> None:
-    """后台确认用户这个模型认不认转写：失败不影响本次返回。"""
     try:
         detect_stt_model(provider)
     except Exception as exc:  # noqa: BLE001 - 探测失败不影响任何功能
@@ -187,7 +163,6 @@ def transcribe(
             language=language,
         )
     except AIProviderError as exc:
-        # 这次没成（Key 失效、超时、限流…）：如实报错，让用户决定换通道还是重试
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if text is None:

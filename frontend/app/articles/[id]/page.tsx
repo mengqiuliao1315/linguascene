@@ -35,7 +35,6 @@ function ArticleReader() {
       .catch((err) => setError(err instanceof Error ? err.message : "加载失败"));
   }, [params.id]);
 
-  /** 选中单个词时弹出查词卡片；选中整句时请求句子分析。 */
   const handleMouseUp = useCallback(() => {
     const selected = window.getSelection();
     const text = selected?.toString().trim() ?? "";

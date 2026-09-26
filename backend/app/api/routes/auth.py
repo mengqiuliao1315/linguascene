@@ -30,7 +30,6 @@ def auth_config() -> dict:
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    # 内部站点默认关闭注册，账号由管理员在后台创建
     if not settings.allow_public_registration:
         raise HTTPException(status_code=403, detail="本站不开放注册，请联系管理员开通账号")
 
@@ -42,7 +41,6 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
     if exists:
         raise HTTPException(status_code=400, detail="邮箱或用户名已被注册")
 
-    # 自助注册一律为普通用户，管理员只能由管理员创建
     user = User(
         username=payload.username,
         email=payload.email,

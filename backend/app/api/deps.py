@@ -25,7 +25,14 @@ def get_current_user(
         )
     subject, token_version = decoded
 
-    user = db.execute(select(User).where(User.id == int(subject))).scalar_one_or_none()
+    try:
+        user_id = int(subject)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已过期"
+        ) from None
+
+    user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
     if int(getattr(user, "token_version", 0) or 0) != token_version:
@@ -45,7 +52,6 @@ def get_user_provider(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """按当前用户的 AI 配置解析出实际要用的 provider。"""
     return ai_config_service.get_provider_for(db, user)
 
 

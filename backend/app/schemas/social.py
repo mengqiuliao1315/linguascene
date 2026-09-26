@@ -1,18 +1,11 @@
-"""社交与个人计划相关 Schema。"""
-
 from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-# 用户输入的文字统一先去掉首尾空白再校验长度，否则 "   " 能通过 min_length=1。
-# 服务层还会再 strip 一次，这里是为了让空白输入直接返回 422 而不是存进库里。
 NonBlank = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20000)
 ]
-
-
-# ------------------------------------------------------------------ 每日计划
 
 
 class QuestMetricOut(BaseModel):
@@ -22,7 +15,6 @@ class QuestMetricOut(BaseModel):
 
 
 class QuestOut(BaseModel):
-    """系统任务与自建计划共用同一形状，custom 区分来源。"""
 
     id: int | None = None
     key: str
@@ -54,18 +46,14 @@ class QuestUpdate(BaseModel):
 
 
 class QuestCheckUpdate(BaseModel):
-    """用户手动打勾 / 取消打勾。"""
 
     completed: bool
-
-
-# ------------------------------------------------------------------ 打卡与统计
 
 
 class HeatCell(BaseModel):
     date: str
     count: int
-    level: int  # 0-4，用于前端选色
+    level: int
 
 
 class HeatmapOut(BaseModel):
@@ -77,7 +65,6 @@ class HeatmapOut(BaseModel):
 
 
 class UserStats(BaseModel):
-    """用户公开数据。贡献值口径见 wordbook_service.CONTRIBUTION_RULES。"""
 
     user_id: int
     username: str
@@ -120,13 +107,9 @@ class LeaderRow(ChartBar):
 
 
 class LeaderboardOut(BaseModel):
-    """柱状图和列表来自同一份数据，前端两处渲染同一个响应。"""
 
     bars: list[ChartBar]
     entries: list[LeaderRow]
-
-
-# ------------------------------------------------------------------ 好友
 
 
 class FriendOut(BaseModel):
@@ -151,11 +134,8 @@ class FriendRequestOut(BaseModel):
 
 
 class FriendStatusOut(BaseModel):
-    state: str  # none | friends | outgoing | incoming | self
+    state: str
     friendship_id: int | None = None
-
-
-# ------------------------------------------------------------------ 私信
 
 
 class ChatMessageCreate(BaseModel):
@@ -182,9 +162,6 @@ class ChatThreadOut(BaseModel):
     unread: int = 0
 
 
-# ------------------------------------------------------------------ 论坛
-
-
 class ForumAuthor(BaseModel):
     user_id: int
     username: str
@@ -209,8 +186,8 @@ class PostCardOut(BaseModel):
     id: int
     title: str
     summary: str
-    truncated: bool = False  # 正文长于摘要上限，卡片需折叠展示
-    cover: str | None = None  # 正文首图，列表卡片封面
+    truncated: bool = False
+    cover: str | None = None
     tags: list[str]
     author: ForumAuthor
     view_count: int
@@ -228,7 +205,6 @@ class PostDetailOut(PostCardOut):
 
 
 class PostPageOut(BaseModel):
-    """分页响应：列表 + 总数，前端据此显示「加载更多」。"""
 
     items: list[PostCardOut]
     total: int

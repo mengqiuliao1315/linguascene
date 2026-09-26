@@ -1,13 +1,7 @@
-/**
- * 背单词：选词书 → 一次一张卡片 → 自己判断记住没记住。
- *
- * 三种作答：没记住（今天再来）/ 记住了（排进复习）/ 已掌握（不再出现）。
- * 新学和复习是两条独立队列，每天各自有目标，可以在页面上直接改。
- */
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { WordFlashcard, playWord, preloadWord } from "@/components/WordFlashcard";
@@ -16,51 +10,36 @@ import { RequireAuth } from "@/lib/auth";
 import {
   wordbookApi,
   type StudyAction,
-  type StudyMode,
   type StudySummary,
   type WordCard,
   type Wordbook,
 } from "@/lib/wordbook";
 
 const BATCH = 20;
-const MODES: { key: StudyMode; label: string }[] = [
-  { key: "new", label: "新学" },
-  { key: "review", label: "复习" },
-];
 
 function StudyScreen() {
   const [books, setBooks] = useState<Wordbook[]>([]);
   const [book, setBook] = useState("");
-  const [mode, setMode] = useState<StudyMode>("new");
   const [summary, setSummary] = useState<StudySummary | null>(null);
   const [queue, setQueue] = useState<WordCard[]>([]);
-  const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [editingGoals, setEditingGoals] = useState(false);
-  const [draft, setDraft] = useState({ new_words: 15, review_words: 30 });
+  const [draft, setDraft] = useState(30);
 
-  // 本轮已经答过的词，重新拉队列时不再出现（「没记住」当天可重学，但不在一轮里连刷）
-  const sessionSeen = useRef<Set<number>>(new Set());
-
-  const refresh = useCallback(async (nextMode: StudyMode, nextBook: string) => {
+  const refresh = useCallback(async (nextBook: string) => {
     setLoading(true);
     setError("");
     try {
       const [nextSummary, page] = await Promise.all([
         wordbookApi.studySummary(nextBook || undefined),
-        wordbookApi.studyQueue({
-          mode: nextMode,
-          book: nextBook || undefined,
-          limit: BATCH,
-        }),
+        wordbookApi.studyQueue({ book: nextBook || undefined, limit: BATCH }),
       ]);
       setSummary(nextSummary);
-      setQueue(page.items.filter((word) => !sessionSeen.current.has(word.id)));
-      setIndex(0);
+      setQueue(page.items);
       setRevealed(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
@@ -76,7 +55,7 @@ function StudyScreen() {
         setBooks(res.items);
         const first = res.items[0]?.code ?? "";
         setBook(first);
-        void refresh("new", first);
+        void refresh(first);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "加载失败");
@@ -84,58 +63,46 @@ function StudyScreen() {
       });
   }, [refresh]);
 
-  const switchMode = (next: StudyMode) => {
-    if (next === mode) return;
-    sessionSeen.current = new Set();
-    setMode(next);
-    void refresh(next, book);
-  };
-
   const switchBook = (next: string) => {
     if (next === book) return;
-    sessionSeen.current = new Set();
     setBook(next);
-    void refresh(mode, next);
+    void refresh(next);
   };
 
-  const word = queue[index];
-  const progress = summary ? summary[mode] : null;
+  const word = queue[0];
 
-  // 朗读跟着「当前显示的这张卡」走：进页面读第一张，翻到新卡读新词。
-  // 以前是在作答回调里读刚答完的那张，耳朵听到的才是上一个词。
-  // 顺手把后面两张的音频提前拉回来，后端冷合成的那几秒就不会卡在翻卡时。
   useEffect(() => {
     if (loading || !word) return;
     playWord(word.word);
-    queue.slice(index + 1, index + 3).forEach((item) => preloadWord(item.word));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    queue.slice(1, 3).forEach((item) => preloadWord(item.word));
   }, [word?.id, loading]);
 
   const answer = async (action: StudyAction) => {
     if (!word || busy) return;
     setBusy(true);
     try {
-      const result = await wordbookApi.answer(word.id, action, mode, book || undefined);
-      sessionSeen.current.add(word.id);
+      const result = await wordbookApi.answer(word.id, action, book || undefined);
       setFlash(
-        action === "mastered"
-          ? `已标记掌握 · +${result.xp_gained} XP`
+        result.status === "mastered"
+          ? `已掌握 · +${result.xp_gained} XP`
           : `+${result.xp_gained} XP`
       );
       window.setTimeout(() => setFlash(""), 1600);
 
-      // 进度条用的是服务端统计，后台刷新即可，不阻塞翻到下一张
       wordbookApi
         .studySummary(book || undefined)
         .then(setSummary)
         .catch(() => undefined);
 
-      if (index + 1 < queue.length) {
-        setIndex(index + 1);
-        setRevealed(false);
-      } else {
-        await refresh(mode, book);
+      // 没背出去的词放回队列的随机位置，之后还会再碰到
+      const rest = queue.slice(1);
+      if (result.status !== "mastered") {
+        const at = Math.floor(Math.random() * (rest.length + 1));
+        rest.splice(at, 0, result);
       }
+      setQueue(rest);
+      setRevealed(false);
+      if (rest.length === 0) void refresh(book);
     } catch (err) {
       setError(err instanceof Error ? err.message : "提交失败");
     } finally {
@@ -145,21 +112,14 @@ function StudyScreen() {
 
   const openGoals = () => {
     if (!summary) return;
-    setDraft({
-      new_words: summary.new.target,
-      review_words: summary.review.target,
-    });
+    setDraft(summary.target);
     setEditingGoals(true);
   };
 
   const saveGoals = async () => {
-    await wordbookApi.saveDailyTask({
-      target_new_words: draft.new_words,
-      target_review_words: draft.review_words,
-    });
+    await wordbookApi.saveDailyTask({ target_words: Math.max(1, draft) });
     setEditingGoals(false);
-    sessionSeen.current = new Set();
-    await refresh(mode, book);
+    await refresh(book);
   };
 
   return (
@@ -178,7 +138,6 @@ function StudyScreen() {
         </div>
       </div>
 
-      {/* 词书 */}
       <div className="flex flex-wrap gap-2">
         {books.map((item) => (
           <button
@@ -196,27 +155,9 @@ function StudyScreen() {
         ))}
       </div>
 
-      {/* 新学 / 复习 + 今日目标 */}
       <div className="card space-y-3 p-4">
         <div className="flex items-center gap-2">
-          {MODES.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => switchMode(item.key)}
-              className={`rounded-xl px-3.5 py-1.5 text-sm transition ${
-                mode === item.key
-                  ? "bg-slate-900 text-white"
-                  : "border border-slate-200 bg-white text-slate-600"
-              }`}
-            >
-              {item.label}
-              {summary ? (
-                <span className="ml-1.5 text-[11px] opacity-70">
-                  {summary[item.key].done}/{summary[item.key].target}
-                </span>
-              ) : null}
-            </button>
-          ))}
+          <span className="text-sm font-medium text-slate-700">今日背词</span>
           <button
             onClick={editingGoals ? () => setEditingGoals(false) : openGoals}
             className="ml-auto text-xs text-brand-600 hover:underline"
@@ -228,32 +169,14 @@ function StudyScreen() {
         {editingGoals ? (
           <div className="space-y-2 rounded-xl bg-slate-50 p-3">
             <label className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">每天新学</span>
+              <span className="text-slate-600">每天背单词</span>
               <span className="flex items-center gap-2">
                 <input
                   type="number"
-                  min={0}
-                  max={200}
-                  value={draft.new_words}
-                  onChange={(e) =>
-                    setDraft((prev) => ({ ...prev, new_words: Number(e.target.value) }))
-                  }
-                  className="input w-20 py-1 text-right text-sm"
-                />
-                <span className="text-xs text-slate-400">词</span>
-              </span>
-            </label>
-            <label className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">每天复习</span>
-              <span className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
+                  min={1}
                   max={300}
-                  value={draft.review_words}
-                  onChange={(e) =>
-                    setDraft((prev) => ({ ...prev, review_words: Number(e.target.value) }))
-                  }
+                  value={draft}
+                  onChange={(e) => setDraft(Number(e.target.value))}
                   className="input w-20 py-1 text-right text-sm"
                 />
                 <span className="text-xs text-slate-400">词</span>
@@ -271,23 +194,16 @@ function StudyScreen() {
               </button>
             </div>
           </div>
-        ) : progress ? (
+        ) : summary ? (
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
               <span>
-                {mode === "new" ? "新学" : "复习"}进度 {progress.done}/
-                {progress.target}
+                进度 {summary.done}/{summary.target}
               </span>
-              <span>
-                {mode === "new"
-                  ? `未学 ${summary?.new.available ?? 0}`
-                  : `到期 ${summary?.review.due ?? 0}`}
-              </span>
+              <span>词书剩余 {summary.available}</span>
             </div>
             <ProgressBar
-              value={
-                progress.target ? (progress.done / progress.target) * 100 : 100
-              }
+              value={summary.target ? (summary.done / summary.target) * 100 : 100}
             />
           </div>
         ) : null}
@@ -300,9 +216,7 @@ function StudyScreen() {
       ) : word ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>
-              {mode === "new" ? "新学" : "复习"} · 第 {index + 1} / {queue.length} 张
-            </span>
+            <span>本轮剩余 {queue.length} 张</span>
             <span className="h-4 text-brand-600">{flash}</span>
           </div>
 
@@ -344,34 +258,10 @@ function StudyScreen() {
         </div>
       ) : (
         <div className="card space-y-3 p-6 text-center">
-          <p className="text-sm text-slate-600">
-            {mode === "new"
-              ? progress && progress.target > 0
-                ? "今天的新学目标完成了 🎉"
-                : "这本词书的新词都学完了 🎉"
-              : "今天的复习目标完成了 🎉"}
-          </p>
+          <p className="text-sm text-slate-600">这本词书都背完了 🎉</p>
           <div className="flex flex-wrap justify-center gap-2">
-            {mode === "new" ? (
-              <button
-                onClick={() => switchMode("review")}
-                className="btn-primary px-4 py-2 text-sm"
-              >
-                去复习
-              </button>
-            ) : (
-              <button
-                onClick={() => switchMode("new")}
-                className="btn-primary px-4 py-2 text-sm"
-              >
-                去新学
-              </button>
-            )}
             <button
-              onClick={() => {
-                sessionSeen.current = new Set();
-                void refresh(mode, book);
-              }}
+              onClick={() => refresh(book)}
               className="btn-ghost px-4 py-2 text-sm"
             >
               继续

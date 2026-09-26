@@ -1,12 +1,4 @@
-/**
- * 内置开场白的静态音频清单。
- *
- * 由 `frontend/scripts/build_opening_audio.py` 生成，**不要手改**：
- * 改完内置场景的开场白（backend/app/data/scenarios.py）之后重跑那个脚本即可。
- *
- * 音频文件在 `public/audio/openings/`，是同一套 edge-tts 语音与格式，只是提前
- * 合成好放进项目里——用户进场景时第一句话不必等现场合成，直接出声。
- */
+import { BASE_PATH } from "./api";
 
 export const OPENING_AUDIO: Record<string, { text: string; file: string }> = {
   "ordering-coffee": {
@@ -63,10 +55,6 @@ export const OPENING_AUDIO: Record<string, { text: string; file: string }> = {
   },
 };
 
-/**
- * 取某个场景开场白的静态音频地址；没有对应文件（或开场白被改过）时返回 null，
- * 调用方回退到后端合成的那条链路。
- */
 export function staticOpeningUrl(
   slug: string | null | undefined,
   text: string
@@ -74,5 +62,5 @@ export function staticOpeningUrl(
   if (!slug) return null;
   const entry = OPENING_AUDIO[slug];
   if (!entry || entry.text !== text) return null;
-  return entry.file;
+  return `${BASE_PATH}${entry.file}`;
 }

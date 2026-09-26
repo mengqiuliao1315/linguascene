@@ -35,8 +35,8 @@ class Scenario(Base):
     ai_role_prompt: Mapped[str] = mapped_column(Text, default="")
     opening_line: Mapped[str] = mapped_column(Text, default="Hello!")
     goal: Mapped[str] = mapped_column(Text, default="")
-    key_phrases: Mapped[str] = mapped_column(Text, default="")  # JSON 数组
-    key_vocabulary: Mapped[str] = mapped_column(Text, default="")  # JSON 数组
+    key_phrases: Mapped[str] = mapped_column(Text, default="")
+    key_vocabulary: Mapped[str] = mapped_column(Text, default="")
     is_published: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -69,9 +69,9 @@ class Conversation(Base):
     scenario_id: Mapped[int | None] = mapped_column(
         ForeignKey("scenarios.id", ondelete="SET NULL"), nullable=True
     )
-    mode: Mapped[str] = mapped_column(String(16), default="scenario")  # scenario | free_talk
+    mode: Mapped[str] = mapped_column(String(16), default="scenario")
     state_json: Mapped[str] = mapped_column(Text, default="{}")
-    completed_tasks: Mapped[str] = mapped_column(Text, default="[]")  # JSON 数组
+    completed_tasks: Mapped[str] = mapped_column(Text, default="[]")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -95,7 +95,7 @@ class Message(Base):
     conversation_id: Mapped[int] = mapped_column(
         ForeignKey("conversations.id", ondelete="CASCADE"), index=True
     )
-    role: Mapped[str] = mapped_column(String(16))  # user | assistant
+    role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
     feedback_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -113,7 +113,7 @@ class Correction(Base):
     corrected_text: Mapped[str] = mapped_column(Text)
     explanation: Mapped[str] = mapped_column(Text, default="")
     correction_type: Mapped[str] = mapped_column(String(32), default="grammar")
-    severity: Mapped[int] = mapped_column(Integer, default=1)  # 1 严重 2 不自然 3 优化
+    severity: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     message = relationship("Message", back_populates="corrections")
@@ -159,11 +159,11 @@ class UserVocabulary(Base):
     note: Mapped[str] = mapped_column(Text, default="")
     exposure_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    # 背单词流程：status 决定这个词还要不要出现（mastered 不再进任何队列）。
-    status: Mapped[str] = mapped_column(String(12), default="new")  # new|learning|review|mastered
+    status: Mapped[str] = mapped_column(String(12), default="new")
     review_stage: Mapped[int] = mapped_column(Integer, default=0)
-    due_date: Mapped[str] = mapped_column(String(10), default="", index=True)  # YYYY-MM-DD
+    due_date: Mapped[str] = mapped_column(String(10), default="", index=True)
     is_new_seen: Mapped[bool] = mapped_column(Boolean, default=False)
+    queue_order: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     vocabulary = relationship("Vocabulary")

@@ -1,6 +1,3 @@
-/**
- * 登录后的应用外壳：顶部导航 + 内容区。
- */
 "use client";
 
 import Link from "next/link";
@@ -27,7 +24,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
-  // 管理员在导航末尾多一个后台入口，普通用户看不到
   const nav =
     user?.role === "ADMIN"
       ? [...NAV, { href: "/admin", label: "管理" }]
