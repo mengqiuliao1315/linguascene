@@ -874,7 +874,9 @@ function ChatRoom() {
           </div>
         ) : (
           <p className="text-[11px] text-amber-600">
-            语音输入不可用：你在 AI 模型里配置的模型不支持转写，服务器也没有启用本地识别。
+            语音输入不可用：
+            {voice.unavailableDetail ||
+              "你在 AI 模型里配置的模型不支持转写，服务器也没有启用本地识别。"}
           </p>
         )}
 

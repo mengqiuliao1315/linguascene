@@ -108,6 +108,8 @@ def stt_capability(
     status["engines"] = [local] if local else []
     status["engine"] = ENGINE_MODEL if status["available"] else ""
     status["local_model"] = local_asr.model_name() if local_asr.available() else ""
+    # 本地识别不能用时说清楚卡在哪，前端会把这句直接显示给用户。
+    status["local_reason"] = local_asr.unavailable_reason()
     return status
 
 
@@ -149,7 +151,10 @@ def transcribe(
 
     if engine == ENGINE_LOCAL:
         if not local_asr.available():
-            raise HTTPException(status_code=503, detail="这台服务器没有启用本地识别")
+            raise HTTPException(
+                status_code=503,
+                detail=local_asr.unavailable_reason() or "这台服务器没有启用本地识别",
+            )
         text = local_asr.transcribe(audio, filename=filename)
         if not text:
             raise HTTPException(status_code=502, detail="本地识别没听出内容，请再说一遍")

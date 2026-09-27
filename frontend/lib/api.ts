@@ -37,16 +37,19 @@ const TOKEN_KEY = "linguascene_token";
 
 export type VoiceEngine = "model" | "local";
 
+// 令牌存放在 sessionStorage：关闭标签页/浏览器后即失效，下次打开网站必须重新登录。
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return window.sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string): void {
-  window.localStorage.setItem(TOKEN_KEY, token);
+  window.sessionStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearToken(): void {
+  window.sessionStorage.removeItem(TOKEN_KEY);
+  // 清除旧版本残留在 localStorage 里的令牌，避免历史登录状态继续生效。
   window.localStorage.removeItem(TOKEN_KEY);
 }
 
@@ -377,6 +380,7 @@ export const api = {
       engine: VoiceEngine | "";
       model: string;
       local_model: string;
+      local_reason: string;
       reason: string;
       engines: { id: VoiceEngine; label: string; detail: string }[];
     }>("/api/audio/stt"),

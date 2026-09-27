@@ -26,5 +26,5 @@ boto3==1.36.3
 
 # 可选：服务端本地语音识别（不需要 API Key、不花钱）。装了就有「本地识别」这条
 # 语音输入通道，用户没接模型 API 或那把 Key 失效时顶上；不装则自动降级。
-# 首次使用会把模型下到 backend/storage/whisper（base.en 约 145MB）。
+# 首次使用会把模型下到 backend/storage/whisper（small.en 约 490MB）。
 faster-whisper==1.2.1

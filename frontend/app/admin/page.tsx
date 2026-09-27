@@ -10,6 +10,10 @@ import type { AdminUser, CreatedCredentials } from "@/lib/types";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
 
+function parseServerTime(value: string): Date {
+  return new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(value) ? value : `${value}Z`);
+}
+
 function suggestPassword(): string {
   const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   return Array.from({ length: 10 }, () =>
@@ -442,7 +446,7 @@ function AdminConsole() {
                 {user.password_updated_at ? (
                   <p className="mt-0.5 text-[11px] text-slate-400">
                     密码更新于{" "}
-                    {new Date(user.password_updated_at).toLocaleString("zh-CN")}
+                    {parseServerTime(user.password_updated_at).toLocaleString("zh-CN")}
                   </p>
                 ) : null}
               </div>

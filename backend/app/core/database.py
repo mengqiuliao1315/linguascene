@@ -2,18 +2,29 @@ from collections.abc import Generator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
 connect_args = {}
+engine_kwargs: dict = {"future": True}
+
 if settings.database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+    # SQLite 的连接对象不能跨线程复用：它内部带语句缓存，多个线程先后
+    # 用同一个连接会偶发 KeyError（表现为 500 服务器内部错误）。
+    # NullPool 让每个 Session 独占一条连接、用完即关，关掉语句缓存兜底。
+    connect_args = {
+        "check_same_thread": False,
+        "cached_statements": 0,
+    }
+    engine_kwargs["poolclass"] = NullPool
+else:
+    engine_kwargs["pool_pre_ping"] = True
 
 engine = create_engine(
     settings.database_url,
     connect_args=connect_args,
-    pool_pre_ping=True,
-    future=True,
+    **engine_kwargs,
 )
 
 if settings.database_url.startswith("sqlite"):

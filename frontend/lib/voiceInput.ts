@@ -137,6 +137,9 @@ export function useVoiceInput({
 
   const [modelSlow, setModelSlow] = useState(false);
 
+  // 两条通道都用不了时，把服务端说清楚的原因拼出来，直接显示给用户。
+  const [unavailableDetail, setUnavailableDetail] = useState("");
+
   const valueRef = useRef(value);
   valueRef.current = value;
 
@@ -219,6 +222,11 @@ export function useVoiceInput({
         );
         setEngines(usable);
         setModelReady(available.has("model"));
+
+        const details = [status.reason, status.local_reason].filter(
+          (item): item is string => Boolean(item)
+        );
+        setUnavailableDetail(details.join("，"));
 
         const saved = savedEngine();
         const preferred = saved ?? DEFAULT_ENGINE;
@@ -547,6 +555,8 @@ export function useVoiceInput({
     setEngine,
 
     engines,
+
+    unavailableDetail,
 
     channelPrompt,
 

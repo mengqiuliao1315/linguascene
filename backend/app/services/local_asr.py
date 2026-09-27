@@ -22,9 +22,25 @@ _model = None
 _model_lock = threading.Lock()
 _run_lock = threading.Lock()
 
+# 给模型一段「标准英文」的上下文：whisper 会照着这个风格输出，
+# 于是结果自带大小写和标点，而不是一长串小写单词。
+_INITIAL_PROMPT = (
+    "Hi there! What can I get for you today? "
+    "I'd like a medium latte, please. Sure, that'll be five dollars."
+)
+
+
+def unavailable_reason() -> str:
+    """本地识别为什么用不了——直接拿去告诉用户，省得猜。"""
+    if _IMPORT_ERROR is not None:
+        return "服务端没装 faster-whisper（pip install -r requirements.txt）"
+    if not settings.local_asr:
+        return "服务端把 LOCAL_ASR 关掉了"
+    return ""
+
 
 def available() -> bool:
-    return _IMPORT_ERROR is None and settings.local_asr
+    return unavailable_reason() == ""
 
 
 def model_name() -> str:
@@ -81,7 +97,12 @@ def transcribe(audio: bytes, *, filename: str = "speech.webm") -> str | None:
             segments, _info = model.transcribe(
                 str(tmp),
                 language="en",
-                beam_size=1,
+                # beam search 比贪心更能挑出带标点的写法；配合 initial_prompt
+                # 一起保证「I'd like a latte, please.」这种大小写和标点。
+                beam_size=5,
+                initial_prompt=_INITIAL_PROMPT,
+                # 每段都是几秒的短录音，不需要跨段复用上下文（反而容易串词）。
+                condition_on_previous_text=False,
                 vad_filter=True,
                 without_timestamps=True,
             )
