@@ -198,6 +198,24 @@ export function useVoiceInput({
       Boolean(navigator.mediaDevices?.getUserMedia) &&
       typeof MediaRecorder !== "undefined";
 
+    // 浏览器只在 HTTPS（或 localhost）下暴露麦克风 API：用 http://IP 打开时
+    // navigator.mediaDevices 直接就是 undefined。这种时候要说清是访问方式的问题，
+    // 别让用户以为是服务端没配识别。
+    const insecurePage =
+      typeof window !== "undefined" &&
+      !window.isSecureContext &&
+      !["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+
+    if (insecurePage) {
+      setUnavailableDetail(
+        "当前是 HTTP 访问，浏览器不允许网页使用麦克风，需要走 HTTPS（或 localhost）"
+      );
+      setMode("none");
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!canRecord) {
 
       setMode("none");
