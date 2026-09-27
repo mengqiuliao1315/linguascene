@@ -314,6 +314,7 @@ function ChatRoom() {
     value: input,
     onText: setInput,
     disabled: Boolean(conversation?.is_completed),
+    scenarioId: conversation?.scenario?.id,
   });
 
   useEffect(() => {

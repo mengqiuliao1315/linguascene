@@ -389,12 +389,15 @@ export const api = {
     blob: Blob,
     filename: string,
     language = "en",
-    engine: VoiceEngine = "model"
+    engine: VoiceEngine = "model",
+    scenarioId?: number
   ) => {
     const form = new FormData();
     form.append("file", blob, filename);
     form.append("language", language);
     form.append("engine", engine);
+    // 带上场景，服务端才能用该场景的重点句式/词汇给本地识别做提示。
+    if (scenarioId) form.append("scenario_id", String(scenarioId));
     return request<{ text: string; engine: VoiceEngine }>(
       "/api/audio/transcribe",
       { method: "POST", body: form }

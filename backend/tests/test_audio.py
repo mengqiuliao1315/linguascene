@@ -120,14 +120,57 @@ from app.services import local_asr  # noqa: E402
 def _enable_local(monkeypatch, text: str = "I would like a latte.") -> dict:
     calls = {"count": 0}
 
-    def fake_transcribe(audio, *, filename="speech.webm"):
+    def fake_transcribe(audio, *, filename="speech.webm", hotwords=""):
         calls["count"] += 1
+        calls["hotwords"] = hotwords
         return text
 
     monkeypatch.setattr(local_asr, "available", lambda: True)
     monkeypatch.setattr(local_asr, "model_name", lambda: "base.en")
     monkeypatch.setattr(local_asr, "transcribe", fake_transcribe)
     return calls
+
+
+def test_transcribe_feeds_scenario_words_to_local_engine(auth_client, monkeypatch):
+    """场景自带的句式和词汇要真的传进本地识别，否则本地小模型听不出专有名词。"""
+    from sqlalchemy import select
+
+    from app.core.database import SessionLocal
+    from app.models.learning import Scenario
+
+    db = SessionLocal()
+    try:
+        scenario = db.execute(
+            select(Scenario).where(Scenario.slug == "ordering-coffee")
+        ).scalar_one()
+        scenario_id = scenario.id
+    finally:
+        db.close()
+
+    calls = _enable_local(monkeypatch)
+    response = auth_client.post(
+        "/api/audio/transcribe",
+        data={"engine": "local", "scenario_id": str(scenario_id)},
+        files={"file": ("a.webm", b"fake-audio", "audio/webm")},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["engine"] == "local"
+    hotwords = calls["hotwords"]
+    assert "oat milk" in hotwords
+    assert "Can I have it with oat milk?" in hotwords
+
+
+def test_transcribe_without_scenario_sends_no_hotwords(auth_client, monkeypatch):
+    calls = _enable_local(monkeypatch)
+    response = auth_client.post(
+        "/api/audio/transcribe",
+        data={"engine": "local"},
+        files={"file": ("a.webm", b"fake-audio", "audio/webm")},
+    )
+
+    assert response.status_code == 200, response.text
+    assert calls["hotwords"] == ""
 
 
 def test_transcribe_falls_back_to_local_when_model_fails(auth_client, monkeypatch):

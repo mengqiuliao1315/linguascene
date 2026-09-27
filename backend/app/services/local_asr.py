@@ -24,10 +24,9 @@ _run_lock = threading.Lock()
 
 # 给模型一段「标准英文」的上下文：whisper 会照着这个风格输出，
 # 于是结果自带大小写和标点，而不是一长串小写单词。
-_INITIAL_PROMPT = (
-    "Hi there! What can I get for you today? "
-    "I'd like a medium latte, please. Sure, that'll be five dollars."
-)
+# 这里只管风格，不写任何具体场景的词汇——场景词由调用方用 hotwords 传进来，
+# 否则换到「机场值机」还带着咖啡店的口音偏好，反而更容易听错。
+_INITIAL_PROMPT = "Hello! How can I help you today? Yes, please. Thank you very much."
 
 
 def unavailable_reason() -> str:
@@ -79,7 +78,7 @@ def warm_up() -> None:
     threading.Thread(target=run, name="local-asr-warmup", daemon=True).start()
 
 
-def transcribe(audio: bytes, *, filename: str = "speech.webm") -> str | None:
+def transcribe(audio: bytes, *, filename: str = "speech.webm", hotwords: str = "") -> str | None:
     if not available() or not audio:
         return None
 
@@ -101,6 +100,9 @@ def transcribe(audio: bytes, *, filename: str = "speech.webm") -> str | None:
                 # 一起保证「I'd like a latte, please.」这种大小写和标点。
                 beam_size=5,
                 initial_prompt=_INITIAL_PROMPT,
+                # 场景自带的重点句式和词汇：whisper 会把它们当成上下文，
+                # 优先往这些词上靠。学生说的基本就是这个场景里的词，明显更认得住。
+                hotwords=hotwords or None,
                 # 每段都是几秒的短录音，不需要跨段复用上下文（反而容易串词）。
                 condition_on_previous_text=False,
                 vad_filter=True,

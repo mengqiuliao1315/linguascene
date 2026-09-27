@@ -6,9 +6,9 @@ import { ApiError, api, type VoiceEngine } from "./api";
 
 export type VoiceMode = VoiceEngine | "none";
 
-const SILENCE_CUT_MS = 700;
+const SILENCE_CUT_MS = 1200;
 
-const MIN_SPEECH_MS = 500;
+const MIN_SPEECH_MS = 350;
 
 const MAX_SEGMENT_MS = 12000;
 
@@ -110,6 +110,8 @@ type VoiceOptions = {
   onText: (text: string) => void;
   lang?: string;
   disabled?: boolean;
+  // 当前场景 id：服务端据此取该场景的重点句式/词汇，给本地识别做提示。
+  scenarioId?: number;
 };
 
 export function useVoiceInput({
@@ -117,6 +119,7 @@ export function useVoiceInput({
   onText,
   lang = "en-US",
   disabled = false,
+  scenarioId,
 }: VoiceOptions) {
   const [mode, setMode] = useState<VoiceMode>("none");
   const [recording, setRecording] = useState(false);
@@ -142,6 +145,9 @@ export function useVoiceInput({
 
   const valueRef = useRef(value);
   valueRef.current = value;
+
+  const scenarioIdRef = useRef(scenarioId);
+  scenarioIdRef.current = scenarioId;
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -355,7 +361,8 @@ export function useVoiceInput({
             blob,
             `speech.${extensionFor(mimeType)}`,
             "en",
-            wanted
+            wanted,
+            scenarioIdRef.current
           );
           const applied = appendText(result.text ?? "");
           if (!applied) {
@@ -396,7 +403,7 @@ export function useVoiceInput({
     let recorder: MediaRecorder;
     try {
       recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 64000 })
+        ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 128000 })
         : new MediaRecorder(stream);
     } catch {
       wantListenRef.current = false;
@@ -508,8 +515,10 @@ export function useVoiceInput({
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
+          // 识别要的是原始波形。回声消除和降噪是给打电话用的，会把辅音抹平、
+          // 把停顿切没，喂给 whisper 反而更糟，所以只留自动增益（补小音量）。
+          echoCancellation: false,
+          noiseSuppression: false,
           autoGainControl: true,
         },
       });

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import threading
 
@@ -13,6 +14,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
 
 from app.ai.provider import (
     AIProviderError,
@@ -20,6 +22,8 @@ from app.ai.provider import (
     stt_status,
 )
 from app.api.deps import get_current_user, get_user_provider
+from app.core.database import get_db
+from app.models.learning import Scenario
 from app.services import audio_service, local_asr
 
 logger = logging.getLogger(__name__)
@@ -120,11 +124,42 @@ def _probe_stt_model(provider) -> None:
         logger.info("语音转写后台探测失败：%s", exc)
 
 
+# whisper 的提示词上限是 448 个 token，截到 400 个字符留足余量。
+MAX_HOTWORDS_CHARS = 400
+
+
+def _scenario_hotwords(db: Session, scenario_id: int) -> str:
+    """把场景自带的重点句式和词汇拼成本地识别的提示词。
+
+    学生在这个场景里说的话基本围着这些词转，喂给模型比自己猜准得多。
+    场景不存在或没填词表就返回空串，等于不提示。
+    """
+    scenario = db.get(Scenario, scenario_id)
+    if scenario is None:
+        return ""
+
+    items: list[str] = [scenario.opening_line]
+    for raw in (scenario.key_phrases, scenario.key_vocabulary):
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, list):
+            items.extend(str(item) for item in parsed)
+
+    joined = ", ".join(item.strip() for item in items if item and item.strip())
+    return joined[:MAX_HOTWORDS_CHARS].rstrip(" ,")
+
+
 @router.post("/transcribe")
 def transcribe(
     file: UploadFile = File(...),
     language: str = Form(default="en"),
     engine: str = Form(default=ENGINE_MODEL),
+    scenario_id: int = Form(default=0),
+    db: Session = Depends(get_db),
     user=Depends(get_current_user),
     provider=Depends(get_user_provider),
 ) -> dict:
@@ -140,6 +175,9 @@ def transcribe(
 
     两种情况下前端拿到 503 会弹窗让用户选通道；502 是这次没成（超时、限流、
     Key 失效），提示重试即可。
+
+    scenario_id 是当前场景，只对 `local` 有用：用它取出场景自带的重点句式和
+    词汇当提示词，本地小模型认这些词明显更准。
     """
     audio = file.file.read(MAX_TRANSCRIBE_BYTES + 1)
     if not audio:
@@ -155,7 +193,11 @@ def transcribe(
                 status_code=503,
                 detail=local_asr.unavailable_reason() or "这台服务器没有启用本地识别",
             )
-        text = local_asr.transcribe(audio, filename=filename)
+        text = local_asr.transcribe(
+            audio,
+            filename=filename,
+            hotwords=_scenario_hotwords(db, scenario_id) if scenario_id else "",
+        )
         if not text:
             raise HTTPException(status_code=502, detail="本地识别没听出内容，请再说一遍")
         return {"text": text, "engine": ENGINE_LOCAL}
