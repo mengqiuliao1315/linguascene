@@ -96,6 +96,21 @@ def test_split_sentences_drops_non_english_lines():
     ]
 
 
+def test_split_sentences_drops_paragraph_markers():
+    text = "A.\n\nFive hundred years ago, forests covered the land. B.\n\nBut that soon changed."
+    assert [s for _, s in split_sentences(text)] == [
+        "Five hundred years ago, forests covered the land.",
+        "But that soon changed.",
+    ]
+    assert [(p, s) for p, s in split_sentences("C. Only this sentence stays.")] == [
+        (0, "Only this sentence stays.")
+    ]
+    assert split_sentences("(A)") == []
+    assert [s for _, s in split_sentences("II. Third section text.")] == [
+        "Third section text."
+    ]
+
+
 def test_upload_drops_chinese_lines_but_keeps_inline_gloss(auth_client):
     text = (
         "中文标题\n\n"

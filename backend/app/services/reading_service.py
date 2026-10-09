@@ -31,6 +31,15 @@ _SENTENCE_END = re.compile(r"[.!?]+[\"')\]]*(?=\s|$|[A-Z])")
 
 _HAS_ENGLISH = re.compile(r"[A-Za-z]")
 
+# 段落标记（A. B. C.、I. II.、(A) 等）只是分段符号，不应作为句子参与解析
+_PARAGRAPH_MARKER = re.compile(
+    r"^(?:[\(\[（【]\s*[A-Z]{1,5}\s*[\)\]）】]|[A-Z]{1,5}\s*[.。)）:：、])$"
+)
+
+
+def _is_paragraph_marker(text: str) -> bool:
+    return bool(_PARAGRAPH_MARKER.match(text.strip()))
+
 
 def split_sentences(text: str) -> list[tuple[int, str]]:
     result: list[tuple[int, str]] = []
@@ -63,7 +72,11 @@ def split_sentences(text: str) -> list[tuple[int, str]]:
         if buffer:
             result.append((p_index, buffer))
 
-    return [item for item in result if _HAS_ENGLISH.search(item[1])]
+    return [
+        item
+        for item in result
+        if _HAS_ENGLISH.search(item[1]) and not _is_paragraph_marker(item[1])
+    ]
 
 
 def _ends_with_abbreviation(text: str) -> bool:
