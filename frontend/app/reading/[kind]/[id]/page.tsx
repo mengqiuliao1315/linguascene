@@ -856,6 +856,28 @@ function Workspace() {
     }
   }
 
+  async function handleHideSentence(index: number) {
+    if (
+      !window.confirm(
+        "删除后这句话不再显示，导出 PDF 也不包含它。确定删除吗？"
+      )
+    ) {
+      return;
+    }
+    try {
+      await readingApi.hideSentence(kind, materialId, index);
+      setSentences((prev) => prev.filter((s) => s.index !== index));
+      setSuggestions((prev) => {
+        if (!(index in prev)) return prev;
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "删除失败");
+    }
+  }
+
   if (loading) return <Spinner />;
   if (error && !material) return <EmptyState text={error} />;
   if (!material) return <EmptyState text="材料不存在" />;
@@ -1024,6 +1046,14 @@ function Workspace() {
                       )}
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleHideSentence(sentence.index)}
+                    title="删除这句：不再显示，导出 PDF 也不包含"
+                    className="mt-1 shrink-0 rounded-lg px-2 py-1 text-[11px] text-slate-400 transition hover:bg-rose-50 hover:text-rose-500"
+                  >
+                    删除
+                  </button>
                 </div>
 
                 {sentence.pending ? (

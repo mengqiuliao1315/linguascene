@@ -71,6 +71,23 @@ class UserContent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ReadingHiddenSentence(Base):
+    """用户在某篇材料里删掉的句子（按用户记录，仅对自己生效）。"""
+
+    __tablename__ = "reading_hidden_sentences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    article_id: Mapped[int | None] = mapped_column(
+        ForeignKey("articles.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    content_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user_content.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    sentence_index: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ReadingNote(Base):
 
     __tablename__ = "reading_notes"

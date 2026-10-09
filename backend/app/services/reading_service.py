@@ -14,7 +14,13 @@ from app.ai.agents.annotation_agent import AnnotationAgent
 from app.ai.batch_tuner import get_batch_tuner
 from app.ai.provider import AIProvider
 from app.data.reading_content import build_sentences
-from app.models.content import Article, ArticleAnalysis, ReadingNote, UserContent
+from app.models.content import (
+    Article,
+    ArticleAnalysis,
+    ReadingHiddenSentence,
+    ReadingNote,
+    UserContent,
+)
 from app.models.learning import Vocabulary
 from app.models.user import User
 
@@ -489,16 +495,19 @@ def stream_analysis(
     *,
     force: bool = False,
     provider: AIProvider | None = None,
+    hidden: set[int] | None = None,
 ) -> Iterator[str]:
+    hidden = hidden or set()
     segments = split_sentences(document.body)
     yield sse_event(
         "start",
         {
             "level": document.level,
-            "total": len(segments),
+            "total": len(segments) - len(hidden),
             "sentences": [
                 {"index": index, "paragraph": paragraph, "text": text}
                 for index, (paragraph, text) in enumerate(segments)
+                if index not in hidden
             ],
         },
     )
@@ -507,6 +516,8 @@ def stream_analysis(
         ready = _reusable_sentences(db, document, segments, force=force)
         if ready is not None:
             for item in ready:
+                if item["index"] in hidden:
+                    continue
                 yield sse_event("sentence", {"sentence": {**item, "notes": []}})
             yield sse_event("done", {"generated": True})
             return
@@ -521,6 +532,8 @@ def stream_analysis(
         ):
             model_hits += 1 if from_model else 0
             by_index[index] = payload
+            if index in hidden:
+                continue
             yield sse_event("sentence", {"sentence": {**payload, "notes": []}})
 
         _persist_sentences(
@@ -602,6 +615,7 @@ def stream_suggestions(
     *,
     provider: AIProvider | None = None,
     sentence_indexes: list[int] | None = None,
+    hidden: set[int] | None = None,
 ) -> Iterator[str]:
     try:
         sentences = analyze_document(db, user, document, provider=provider)["sentences"]
@@ -611,7 +625,9 @@ def stream_suggestions(
         yield sse_event("error", {"detail": f"生成失败：{exc}"})
         return
 
-    targets = suggestion_targets(sentences, sentence_indexes)
+    targets = visible_sentences(
+        suggestion_targets(sentences, sentence_indexes), hidden or set()
+    )
     yield sse_event("start", {"total": len(targets)})
 
     model_hits = 0
@@ -688,6 +704,51 @@ def _scope_notes(query, document: Document):
     if document.kind == "article":
         return query.where(ReadingNote.article_id == document.id)
     return query.where(ReadingNote.content_id == document.id)
+
+
+def _scope_hidden(query, document: Document):
+    if document.kind == "article":
+        return query.where(ReadingHiddenSentence.article_id == document.id)
+    return query.where(ReadingHiddenSentence.content_id == document.id)
+
+
+def hidden_sentence_indexes(db: Session, user: User, document: Document) -> set[int]:
+    query = select(ReadingHiddenSentence.sentence_index).where(
+        ReadingHiddenSentence.user_id == user.id
+    )
+    return set(db.execute(_scope_hidden(query, document)).scalars().all())
+
+
+def visible_sentences(sentences: list[dict], hidden: set[int]) -> list[dict]:
+    if not hidden:
+        return sentences
+    return [item for item in sentences if item["index"] not in hidden]
+
+
+def hide_sentence(
+    db: Session, user: User, document: Document, sentence_index: int
+) -> None:
+    existing = db.execute(
+        _scope_hidden(
+            select(ReadingHiddenSentence).where(
+                ReadingHiddenSentence.user_id == user.id,
+                ReadingHiddenSentence.sentence_index == sentence_index,
+            ),
+            document,
+        )
+    ).scalars().first()
+    if existing is not None:
+        return
+
+    db.add(
+        ReadingHiddenSentence(
+            user_id=user.id,
+            sentence_index=sentence_index,
+            article_id=document.id if document.kind == "article" else None,
+            content_id=document.id if document.kind == "content" else None,
+        )
+    )
+    db.flush()
 
 
 def find_duplicate_note(

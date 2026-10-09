@@ -179,7 +179,10 @@ def get_material(
 
     notes = reading_service.list_notes(db, user, document)
     known = reading_service.vocabulary_word_set(db, user)
-    annotated = reading_service.build_annotations(sentences, notes)
+    hidden = reading_service.hidden_sentence_indexes(db, user, document)
+    annotated = reading_service.visible_sentences(
+        reading_service.build_annotations(sentences, notes), hidden
+    )
     for sentence in annotated:
         for note in sentence["notes"]:
             note["in_vocabulary"] = note["text"].lower() in known
@@ -194,6 +197,23 @@ def get_material(
     )
 
 
+@router.post(
+    "/materials/{kind}/{material_id}/sentences/{sentence_index}/hide",
+    status_code=204,
+)
+def hide_material_sentence(
+    kind: str,
+    material_id: int,
+    sentence_index: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    """删除单句：只对自己生效，之后详情、分析与导出 PDF 都不再包含这句。"""
+    document = _resolve_document(db, user, kind, material_id)
+    reading_service.hide_sentence(db, user, document, sentence_index)
+    db.commit()
+
+
 @router.post("/materials/{kind}/{material_id}/analyze", response_model=ReadingAnalysisOut)
 def analyze_material(
     kind: str,
@@ -206,6 +226,10 @@ def analyze_material(
     document = _resolve_document(db, user, kind, material_id)
     payload = reading_service.analyze_document(
         db, user, document, force=force, provider=provider
+    )
+    hidden = reading_service.hidden_sentence_indexes(db, user, document)
+    payload["sentences"] = reading_service.visible_sentences(
+        payload["sentences"], hidden
     )
     db.commit()
     return ReadingAnalysisOut.model_validate(payload)
@@ -232,7 +256,12 @@ def _analysis_events(
             return
 
         yield from reading_service.stream_analysis(
-            db, user, document, force=force, provider=provider
+            db,
+            user,
+            document,
+            force=force,
+            provider=provider,
+            hidden=reading_service.hidden_sentence_indexes(db, user, document),
         )
         db.commit()
     except Exception:  # noqa: BLE001 - 流已开始，异常只能记日志后断开
@@ -362,7 +391,10 @@ def _collect_suggestions(
     )["sentences"]
     db.commit()
 
-    targets = reading_service.suggestion_targets(sentences, payload.sentence_indexes)
+    targets = reading_service.visible_sentences(
+        reading_service.suggestion_targets(sentences, payload.sentence_indexes),
+        reading_service.hidden_sentence_indexes(db, user, document),
+    )
     by_sentence: dict[int, list[SuggestedSpanOut]] = {}
     model_hits = 0
     for index, spans, from_model in reading_service.iter_suggestions(
@@ -426,6 +458,7 @@ def _suggest_events(
             document,
             provider=provider,
             sentence_indexes=sentence_indexes,
+            hidden=reading_service.hidden_sentence_indexes(db, user, document),
         )
         db.commit()
     except Exception:  # noqa: BLE001 - 流已开始，异常只能记日志后断开
@@ -574,7 +607,10 @@ def export_pdf(
         db, user, document, provider=provider
     )
     notes = reading_service.list_notes(db, user, document)
-    sentences = reading_service.build_annotations(payload["sentences"], notes)
+    hidden = reading_service.hidden_sentence_indexes(db, user, document)
+    sentences = reading_service.visible_sentences(
+        reading_service.build_annotations(payload["sentences"], notes), hidden
+    )
     db.commit()
 
     pdf_bytes = pdf_service.build_reading_pdf(

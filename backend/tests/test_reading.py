@@ -161,6 +161,43 @@ def test_open_material_ignores_cache_from_old_splitting(auth_client):
     ]
 
 
+def test_hide_sentence_removes_it_from_detail_and_analysis(auth_client):
+    text = "First one here. Second one follows! Third?"
+    content_id = auth_client.post(
+        "/api/reading/materials/upload",
+        files={"file": ("hide.txt", text.encode("utf-8"), "text/plain")},
+        data={"title": "Hide"},
+    ).json()["id"]
+
+    analyzed = auth_client.post(
+        f"/api/reading/materials/content/{content_id}/analyze"
+    ).json()
+    assert [s["text"] for s in analyzed["sentences"]] == [
+        "First one here.",
+        "Second one follows!",
+        "Third?",
+    ]
+
+    hide = auth_client.post(
+        f"/api/reading/materials/content/{content_id}/sentences/1/hide"
+    )
+    assert hide.status_code == 204
+
+    detail = auth_client.get(f"/api/reading/materials/content/{content_id}").json()
+    assert [s["text"] for s in detail["sentences"]] == [
+        "First one here.",
+        "Third?",
+    ]
+
+    reanalyzed = auth_client.post(
+        f"/api/reading/materials/content/{content_id}/analyze"
+    ).json()
+    assert [s["text"] for s in reanalyzed["sentences"]] == [
+        "First one here.",
+        "Third?",
+    ]
+
+
 def test_lemmatize_irregular_and_suffixes():
     assert lemmatize("went") == "go"
     assert lemmatize("children") == "child"

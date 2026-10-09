@@ -7,6 +7,7 @@ from app.models.ai_config import (
 from app.models.content import (
     Article,
     ArticleAnalysis,
+    ReadingHiddenSentence,
     ReadingNote,
     UserContent,
 )
@@ -65,6 +66,7 @@ __all__ = [
     "ArticleAnalysis",
     "UserContent",
     "ReadingNote",
+    "ReadingHiddenSentence",
     "Achievement",
     "UserAchievement",
     "XpRecord",
