@@ -515,10 +515,11 @@ export function useVoiceInput({
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          // 识别要的是原始波形。回声消除和降噪是给打电话用的，会把辅音抹平、
-          // 把停顿切没，喂给 whisper 反而更糟，所以只留自动增益（补小音量）。
-          echoCancellation: false,
-          noiseSuppression: false,
+          // 这三项必须留着：浏览器 DSP 滤掉的风扇声、键盘声和扬声器回声，
+          // 恰恰是 base.en 这种小模型还能认对的前提——把原始波形直接喂进去，
+          // 小模型会被噪声带崩，实测比开着降噪差很多。
+          echoCancellation: true,
+          noiseSuppression: true,
           autoGainControl: true,
         },
       });
