@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     把当前仓库的源码部署到线上服务器 forddream.icu/linguascene。
 
@@ -42,11 +42,12 @@ function Invoke-Remote {
     if ($LASTEXITCODE -ne 0) { throw "远程命令执行失败（exit $LASTEXITCODE）" }
 }
 
-# 1. 前置检查：必须是干净的已提交状态，否则打包的是旧的 HEAD
-$dirty = git status --porcelain
-if ($dirty -and -not $AllowDirty) {
-    Write-Host "工作区有未提交的改动，git archive 只会打包已提交的内容：" -ForegroundColor Yellow
-    $dirty | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+# 1. 前置检查：已跟踪文件必须已提交，否则打包的是旧的 HEAD。
+#    未跟踪文件（git status 里的 ??）不影响部署，git archive 本来就不会打包。
+git diff --quiet HEAD --
+if ($LASTEXITCODE -ne 0 -and -not $AllowDirty) {
+    Write-Host "以下已跟踪文件尚未提交，git archive 只会打包已提交的内容：" -ForegroundColor Yellow
+    git diff --name-only HEAD -- | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
     throw "请先提交，或用 -AllowDirty 明确接受「只部署已提交内容」。"
 }
 
