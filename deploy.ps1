@@ -38,8 +38,17 @@ foreach ($exe in @($ssh, $scp)) {
 
 function Invoke-Remote {
     param([Parameter(Mandatory)][string]$Script, [int]$TimeoutSec = 120)
-    $Script | & $ssh -i $KeyPath -o BatchMode=yes -o ConnectTimeout=15 $Server "bash -s"
-    if ($LASTEXITCODE -ne 0) { throw "远程命令执行失败（exit $LASTEXITCODE）" }
+    # 写成本地 .sh 文件再上传执行：避免 PowerShell 管道把 CRLF 和中文编码带进 bash。
+    $localSh = Join-Path $env:TEMP "linguascene-deploy-step.sh"
+    $remoteSh = "/tmp/linguascene-deploy-step.sh"
+    $normalized = ($Script -replace "`r`n", "`n").TrimStart("`n")
+    [IO.File]::WriteAllText($localSh, $normalized, (New-Object Text.UTF8Encoding($false)))
+    & $scp -i $KeyPath -o BatchMode=yes $localSh "${Server}:${remoteSh}"
+    if ($LASTEXITCODE -ne 0) { throw "上传执行脚本失败" }
+    & $ssh -i $KeyPath -o BatchMode=yes -o ConnectTimeout=15 $Server "bash $remoteSh"
+    $rc = $LASTEXITCODE
+    Remove-Item $localSh -Force -ErrorAction SilentlyContinue
+    if ($rc -ne 0) { throw "远程命令执行失败（exit $rc）" }
 }
 
 # 1. 前置检查：已跟踪文件必须已提交，否则打包的是旧的 HEAD。
@@ -86,10 +95,10 @@ if ($SkipBuild -and $SkipRestart) {
 # 5. 重建前端 + 重启服务 + 自检
 #    注意：NEXT_PUBLIC_* 是构建期内联的，build 时必须带上，只给 start 设置无效。
 $buildStep = if ($SkipBuild) {
-    'echo "== 跳过前端构建 =="; build_rc=0'
+    'echo "== skip frontend build =="; build_rc=0'
 } else {
     @"
-echo "== 重建前端 =="
+echo "== building frontend =="
 export NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 export NEXT_BASE_PATH=$BasePath NEXT_PUBLIC_BASE_PATH=$BasePath NEXT_PUBLIC_API_BASE=$BasePath
 cd $RemotePath/frontend
@@ -101,10 +110,10 @@ echo "BUILD_RC=`$build_rc"
 }
 
 $restartStep = if ($SkipRestart) {
-    'echo "== 跳过重启 =="'
+    'echo "== skip restart =="'
 } else {
     @"
-echo "== 重启服务 =="
+echo "== restarting services =="
 systemctl restart $BackendService
 systemctl restart $FrontendService
 sleep 5
@@ -118,10 +127,10 @@ $buildStep
 
 $restartStep
 
-echo "== 线上自检 =="
+echo "== live check =="
 curl -s -o /dev/null -w "root=%{http_code}\n" https://forddream.icu$BasePath/ -k
 curl -s -o /dev/null -w "reading=%{http_code}\n" https://forddream.icu$BasePath/reading -k
-echo "== 近期错误日志 =="
+echo "== recent errors =="
 journalctl -u $BackendService -u $FrontendService --since "3 min ago" --no-pager 2>/dev/null | grep -iE "error|traceback|exception" | tail -5
 echo DEPLOY_DONE
 "@ -TimeoutSec 900
