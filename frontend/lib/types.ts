@@ -201,6 +201,12 @@ export interface ArticleAnalysis {
   writing_task: string;
 }
 
+export interface WordSense {
+  part_of_speech: string;
+  meaning: string;
+  example: string;
+}
+
 export interface WordExplanation {
   word: string;
   pronunciation: string;
@@ -211,6 +217,7 @@ export interface WordExplanation {
   example_sentences: string[];
   related_words: string[];
   cefr_level: string;
+  senses: WordSense[];
 }
 
 export interface SentenceAnalysis {

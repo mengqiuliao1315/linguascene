@@ -18,7 +18,9 @@ class VocabularyAgent:
         self, word: str, context: str = "", cefr_level: str = "B1"
     ) -> WordExplanation:
         cleaned = word.strip().lower()
-        key = cache_key("word", "v2", cefr_level, cleaned, self.provider.signature)
+        key = cache_key(
+            "word", "v3", cefr_level, cleaned, context.strip(), self.provider.signature
+        )
         cached = self.cache.get(key)
         if cached:
             return WordExplanation.model_validate(cached)
@@ -40,7 +42,7 @@ class VocabularyAgent:
                     system,
                     f"Explain the word: {word}",
                     WordExplanation,
-                    max_tokens=500,
+                    max_tokens=800,
                 )
                 if raw:
                     return WordExplanation.model_validate(raw), True

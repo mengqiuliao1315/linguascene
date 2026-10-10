@@ -66,7 +66,7 @@ def translate(
     provider=Depends(get_user_provider),
 ) -> WordExplanationOut:
     result = content_service.explain_word(
-        payload.text.strip(), payload.text, user.cefr_level, db, provider
+        payload.text.strip(), payload.context or payload.text, user.cefr_level, db, provider
     )
     return WordExplanationOut.model_validate(result)
 

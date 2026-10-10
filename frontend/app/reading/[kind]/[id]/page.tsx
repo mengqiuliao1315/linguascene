@@ -1243,7 +1243,7 @@ function Workspace() {
             ))}
           </div>
 
-          <aside className="space-y-3 lg:sticky lg:top-20 lg:self-start">
+          <aside className="space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:pr-1">
             <div className="card space-y-3 p-5">
               <div className="flex items-center justify-between">
                 <p className="section-title">本页批注</p>

@@ -67,6 +67,12 @@ class TranslationOut(BaseModel):
     translation: str = ""
 
 
+class WordSense(BaseModel):
+    part_of_speech: str = ""
+    meaning: str = ""
+    example: str = ""
+
+
 class WordExplanation(BaseModel):
     word: str
     pronunciation: str = ""
@@ -77,6 +83,7 @@ class WordExplanation(BaseModel):
     example_sentences: list[str] = Field(default_factory=list)
     related_words: list[str] = Field(default_factory=list)
     cefr_level: str = "B1"
+    senses: list[WordSense] = Field(default_factory=list)
 
 
 class PhraseItem(BaseModel):

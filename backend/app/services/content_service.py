@@ -103,6 +103,46 @@ def _dictionary_examples(entry: Vocabulary) -> list[str]:
     return examples
 
 
+def _dictionary_meanings(entry: Vocabulary) -> list[str]:
+    gloss = (entry.meaning_zh or "").strip() or (entry.meaning or "").strip()
+    return [
+        part.strip()
+        for part in gloss.replace("；", ";").split(";")
+        if part.strip()
+    ]
+
+
+def _dictionary_senses(entry: Vocabulary) -> list[dict]:
+    meanings = _dictionary_meanings(entry)
+    if not meanings:
+        return []
+    examples = _dictionary_examples(entry)
+    return [
+        {
+            "part_of_speech": entry.part_of_speech or "",
+            "meaning": "；".join(meanings),
+            "example": examples[0] if examples else "",
+        }
+    ]
+
+
+def _dictionary_explanation(
+    entry: Vocabulary, cefr_level: str
+) -> dict:
+    return {
+        "word": entry.word,
+        "pronunciation": entry.phonetic_us or entry.phonetic or "",
+        "part_of_speech": entry.part_of_speech or "",
+        "core_meanings": _dictionary_meanings(entry),
+        "meaning_in_context": "",
+        "collocations": [],
+        "example_sentences": _dictionary_examples(entry),
+        "related_words": [],
+        "cefr_level": entry.level or cefr_level,
+        "senses": _dictionary_senses(entry),
+    }
+
+
 def explain_word(
     word: str,
     context: str,
@@ -110,40 +150,43 @@ def explain_word(
     db: Session | None = None,
     provider: AIProvider | None = None,
 ) -> dict:
+    cleaned = word.strip().lower()
+    entry: Vocabulary | None = None
     if db is not None:
         from app.services.reading_service import lemmatize
 
-        cleaned = word.strip().lower()
         candidates = [cleaned]
         lemma = lemmatize(cleaned)
         if lemma and lemma != cleaned:
             candidates.append(lemma)
-        entry = db.execute(
-            select(Vocabulary).where(Vocabulary.word.in_(candidates))
-        ).scalars().first()
-        gloss = ""
-        if entry is not None:
-            gloss = (entry.meaning_zh or "").strip() or (entry.meaning or "").strip()
-        if gloss:
-            meanings = [
-                part.strip()
-                for part in gloss.replace("；", ";").split(";")
-                if part.strip()
-            ]
-            return {
-                "word": entry.word,
-                "pronunciation": entry.phonetic_us or entry.phonetic or "",
-                "part_of_speech": entry.part_of_speech or "",
-                "core_meanings": meanings,
-                "meaning_in_context": "",
-                "collocations": [],
-                "example_sentences": _dictionary_examples(entry),
-                "related_words": [],
-                "cefr_level": entry.level or cefr_level,
-            }
+        entry = (
+            db.execute(select(Vocabulary).where(Vocabulary.word.in_(candidates)))
+            .scalars()
+            .first()
+        )
 
-    explanation = VocabularyAgent(provider).explain(word, context, cefr_level)
-    return explanation.model_dump()
+    # 原形就是词表词条、且词典里有释义：直接取词典，省一次模型调用。
+    if entry is not None and entry.word == cleaned and _dictionary_meanings(entry):
+        return _dictionary_explanation(entry, cefr_level)
+
+    # 屈折形式（degraded / studies / went…）或词表未收录的词交给模型按上下文分析，
+    # 这样 "degraded" 能拿到形容词释义，而不是被还原成动词 "degrade" 的单一词性。
+    explanation = VocabularyAgent(provider).explain(word.strip(), context, cefr_level)
+    result = explanation.model_dump()
+
+    if entry is not None:
+        if not result.get("word"):
+            result["word"] = entry.word
+        if not result.get("pronunciation"):
+            result["pronunciation"] = entry.phonetic_us or entry.phonetic or ""
+        if not result.get("senses"):
+            result["senses"] = _dictionary_senses(entry)
+
+    # 模型没给出任何释义时退回词典，保证至少有东西可看。
+    if not result.get("core_meanings") and not result.get("senses") and entry is not None:
+        return _dictionary_explanation(entry, cefr_level)
+
+    return result
 
 
 def analyze_sentence(

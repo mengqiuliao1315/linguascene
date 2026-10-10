@@ -45,6 +45,12 @@ class ArticleAnalysisOut(BaseModel):
     writing_task: str = ""
 
 
+class WordSenseOut(BaseModel):
+    part_of_speech: str = ""
+    meaning: str = ""
+    example: str = ""
+
+
 class WordExplanationOut(BaseModel):
     word: str
     pronunciation: str = ""
@@ -55,10 +61,12 @@ class WordExplanationOut(BaseModel):
     example_sentences: list[str] = []
     related_words: list[str] = []
     cefr_level: str = "B1"
+    senses: list[WordSenseOut] = []
 
 
 class TranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
+    context: str = Field(default="", max_length=5000)
 
 
 class SentenceAnalysisRequest(BaseModel):
