@@ -214,6 +214,23 @@ def hide_material_sentence(
     db.commit()
 
 
+@router.delete(
+    "/materials/{kind}/{material_id}/sentences/{sentence_index}/hide",
+    status_code=204,
+)
+def unhide_material_sentence(
+    kind: str,
+    material_id: int,
+    sentence_index: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    """撤销删除：把这一句恢复回来（前端只在当前页面会话内提供该入口）。"""
+    document = _resolve_document(db, user, kind, material_id)
+    reading_service.unhide_sentence(db, user, document, sentence_index)
+    db.commit()
+
+
 @router.post("/materials/{kind}/{material_id}/analyze", response_model=ReadingAnalysisOut)
 def analyze_material(
     kind: str,

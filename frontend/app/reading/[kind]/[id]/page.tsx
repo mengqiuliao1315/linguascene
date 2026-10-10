@@ -357,6 +357,9 @@ function Workspace() {
 
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
 
+  // 只在本次停留本页期间可撤销：刷新或重新进入页面后清空，无法恢复上次删除的句子。
+  const [recentlyDeleted, setRecentlyDeleted] = useState<LiveSentence[]>([]);
+
   const streamRef = useRef<AbortController | null>(null);
 
   const autoStartedRef = useRef(false);
@@ -864,9 +867,13 @@ function Workspace() {
     ) {
       return;
     }
+    const removed = sentences.find((s) => s.index === index);
     try {
       await readingApi.hideSentence(kind, materialId, index);
       setSentences((prev) => prev.filter((s) => s.index !== index));
+      if (removed) {
+        setRecentlyDeleted((prev) => [...prev, removed]);
+      }
       setSuggestions((prev) => {
         if (!(index in prev)) return prev;
         const next = { ...prev };
@@ -875,6 +882,20 @@ function Workspace() {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "删除失败");
+    }
+  }
+
+  async function handleRestoreSentence(index: number) {
+    const target = recentlyDeleted.find((s) => s.index === index);
+    if (!target) return;
+    try {
+      await readingApi.unhideSentence(kind, materialId, index);
+      setSentences((prev) =>
+        [...prev, target].sort((a, b) => a.index - b.index)
+      );
+      setRecentlyDeleted((prev) => prev.filter((s) => s.index !== index));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "恢复失败");
     }
   }
 
@@ -972,6 +993,25 @@ function Workspace() {
 
       {error ? (
         <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{error}</p>
+      ) : null}
+
+      {recentlyDeleted.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <span className="text-xs text-slate-500">
+            本次已删除 {recentlyDeleted.length} 句（离开本页后不可恢复）：
+          </span>
+          {recentlyDeleted.map((sentence) => (
+            <button
+              key={sentence.index}
+              type="button"
+              onClick={() => void handleRestoreSentence(sentence.index)}
+              title={sentence.text}
+              className="max-w-[240px] truncate rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 transition hover:border-brand-400 hover:text-brand-600"
+            >
+              恢复「{sentence.text}」
+            </button>
+          ))}
+        </div>
       ) : null}
 
       {sentences.length === 0 ? (

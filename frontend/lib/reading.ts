@@ -260,6 +260,12 @@ export const readingApi = {
       { method: "POST" }
     ),
 
+  unhideSentence: (kind: MaterialKind, id: number, sentenceIndex: number) =>
+    request<void>(
+      `/api/reading/materials/${kind}/${id}/sentences/${sentenceIndex}/hide`,
+      { method: "DELETE" }
+    ),
+
   createNote: (
     kind: MaterialKind,
     id: number,

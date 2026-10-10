@@ -197,6 +197,20 @@ def test_hide_sentence_removes_it_from_detail_and_analysis(auth_client):
         "Third?",
     ]
 
+    restore = auth_client.delete(
+        f"/api/reading/materials/content/{content_id}/sentences/1/hide"
+    )
+    assert restore.status_code == 204
+
+    restored = auth_client.get(
+        f"/api/reading/materials/content/{content_id}"
+    ).json()
+    assert [s["text"] for s in restored["sentences"]] == [
+        "First one here.",
+        "Second one follows!",
+        "Third?",
+    ]
+
 
 def test_lemmatize_irregular_and_suffixes():
     assert lemmatize("went") == "go"

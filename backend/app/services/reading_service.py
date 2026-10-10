@@ -751,6 +751,24 @@ def hide_sentence(
     db.flush()
 
 
+def unhide_sentence(
+    db: Session, user: User, document: Document, sentence_index: int
+) -> None:
+    """恢复被删的句子：清掉隐藏记录，仅对当前页面会话内的撤销有意义。"""
+    rows = db.execute(
+        _scope_hidden(
+            select(ReadingHiddenSentence).where(
+                ReadingHiddenSentence.user_id == user.id,
+                ReadingHiddenSentence.sentence_index == sentence_index,
+            ),
+            document,
+        )
+    ).scalars().all()
+    for row in rows:
+        db.delete(row)
+    db.flush()
+
+
 def find_duplicate_note(
     db: Session,
     user: User,
