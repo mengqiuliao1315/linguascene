@@ -67,6 +67,7 @@ class WordExplanationOut(BaseModel):
 class TranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
     context: str = Field(default="", max_length=5000)
+    fast: bool = False
 
 
 class SentenceAnalysisRequest(BaseModel):

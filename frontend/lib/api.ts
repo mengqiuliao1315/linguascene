@@ -328,10 +328,10 @@ export const api = {
       method: "POST",
     }),
 
-  translate: (text: string, context = "") =>
+  translate: (text: string, context = "", fast = false) =>
     request<WordExplanation>("/api/articles/translate", {
       method: "POST",
-      body: JSON.stringify({ text, context }),
+      body: JSON.stringify({ text, context, fast }),
     }),
 
   analyzeSentence: (sentence: string, context = "") =>

@@ -149,6 +149,7 @@ def explain_word(
     cefr_level: str,
     db: Session | None = None,
     provider: AIProvider | None = None,
+    fast: bool = False,
 ) -> dict:
     cleaned = word.strip().lower()
     entry: Vocabulary | None = None
@@ -164,6 +165,24 @@ def explain_word(
             .scalars()
             .first()
         )
+
+    # fast：只查词典、不调模型。模型是能思考的，一次要几秒到几十秒，
+    # 前端用它先把词典结果秒显出来，再等完整结果替换。
+    if fast:
+        if entry is not None and _dictionary_meanings(entry):
+            return _dictionary_explanation(entry, cefr_level)
+        return {
+            "word": cleaned,
+            "pronunciation": "",
+            "part_of_speech": "",
+            "core_meanings": [],
+            "meaning_in_context": "",
+            "collocations": [],
+            "example_sentences": [],
+            "related_words": [],
+            "cefr_level": cefr_level,
+            "senses": [],
+        }
 
     # 原形就是词表词条、且词典里有释义：直接取词典，省一次模型调用。
     if entry is not None and entry.word == cleaned and _dictionary_meanings(entry):

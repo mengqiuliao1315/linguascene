@@ -53,23 +53,38 @@ export function WordPopover({
   onClose: () => void;
 }) {
   const [data, setData] = useState<WordExplanation | null>(null);
+  const [preview, setPreview] = useState<WordExplanation | null>(null);
   const [saved, setSaved] = useState(false);
   const [noting, setNoting] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [slowPending, setSlowPending] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const lookupRef = useRef<Promise<WordExplanation | null> | null>(null);
   const spokenFor = useRef("");
 
   const display = raw || word;
 
-  const senses = data?.senses ?? [];
+  // 先展示词典结果，等模型分析完再整体替换。
+  const shown = data ?? preview;
+  const senses = shown?.senses ?? [];
 
   const canAnnotate = notedMeaning === undefined || !notedMeaning.trim();
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setData(null);
+    setPreview(null);
     setSaved(false);
+    setFailed(false);
+
+    void api
+      .translate(word, context, true)
+      .then((result) => {
+        if (!cancelled && result.core_meanings.length > 0) setPreview(result);
+        return null;
+      })
+      .catch(() => null);
+
     const task = api
       .translate(word, context)
       .then((result) => {
@@ -77,11 +92,11 @@ export function WordPopover({
         return result;
       })
       .catch(() => {
-        if (!cancelled) setData(null);
+        if (!cancelled) {
+          setData(null);
+          setFailed(true);
+        }
         return null;
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
     lookupRef.current = task;
 
@@ -94,20 +109,30 @@ export function WordPopover({
     };
   }, [word, context]);
 
+  // 词典预览出现后模型还没回来的话，过一会儿提示一句，避免让人以为就不更新了。
+  useEffect(() => {
+    if (!preview || data) {
+      setSlowPending(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSlowPending(true), 900);
+    return () => window.clearTimeout(timer);
+  }, [preview, data]);
+
   function handleSpeak() {
 
-    void speak(data?.word || display);
+    void speak(shown?.word || display);
   }
 
   async function handleSave() {
-    if (!data) return;
+    if (!shown) return;
     await api.saveWord({
-      word: data.word,
+      word: shown.word,
       meaning:
-        data.core_meanings[0] ?? senses[0]?.meaning ?? data.meaning_in_context,
-      phonetic: data.pronunciation,
-      example: data.example_sentences[0] ?? context,
-      level: data.cefr_level,
+        shown.core_meanings[0] ?? senses[0]?.meaning ?? shown.meaning_in_context,
+      phonetic: shown.pronunciation,
+      example: shown.example_sentences[0] ?? context,
+      level: shown.cefr_level,
       source: "reading",
     });
     setSaved(true);
@@ -118,7 +143,7 @@ export function WordPopover({
     setNoting(true);
     try {
 
-      const result = data ?? (await lookupRef.current) ?? null;
+      const result = shown ?? (await lookupRef.current) ?? null;
       const meaning =
         result?.core_meanings.join("；") ||
         result?.senses.map((sense) => sense.meaning).filter(Boolean).join("；") ||
@@ -152,8 +177,8 @@ export function WordPopover({
               🔊
             </button>
           </p>
-          {data?.pronunciation ? (
-            <p className="text-xs text-slate-400">{data.pronunciation}</p>
+          {shown?.pronunciation ? (
+            <p className="text-xs text-slate-400">{shown.pronunciation}</p>
           ) : null}
         </div>
         <button
@@ -164,16 +189,15 @@ export function WordPopover({
         </button>
       </div>
 
-      {loading ? (
+      {!shown && !failed ? (
         <p className="mt-3 text-xs text-slate-400">查询中…</p>
-      ) : !data ||
-        (senses.length === 0 && data.core_meanings.length === 0) ? (
+      ) : !shown ? (
         <p className="mt-3 text-xs text-slate-400">暂无释义</p>
       ) : (
         <div className="mt-3 space-y-2 text-xs">
-          {data.word && data.word.toLowerCase() !== display.toLowerCase() ? (
+          {shown.word && shown.word.toLowerCase() !== display.toLowerCase() ? (
             <p className="text-[11px] text-slate-400">
-              原形：<span className="text-slate-500">{data.word}</span>
+              原形：<span className="text-slate-500">{shown.word}</span>
             </p>
           ) : null}
 
@@ -191,7 +215,7 @@ export function WordPopover({
                   </div>
                   {sense.example ? (
                     <p className="rounded-lg bg-slate-50 p-2 leading-relaxed text-slate-600">
-                      {highlightExample(sense.example, display, data.word)}
+                      {highlightExample(sense.example, display, shown.word)}
                     </p>
                   ) : null}
                 </li>
@@ -199,33 +223,39 @@ export function WordPopover({
             </ul>
           ) : (
             <>
-              {data.part_of_speech ? (
-                <span className="chip-slate">{data.part_of_speech}</span>
+              {shown.part_of_speech ? (
+                <span className="chip-slate">{shown.part_of_speech}</span>
               ) : null}
-              <p className="text-slate-700">{data.core_meanings.join("；")}</p>
-              {data.example_sentences[0] ? (
+              <p className="text-slate-700">{shown.core_meanings.join("；")}</p>
+              {shown.example_sentences[0] ? (
                 <p className="rounded-lg bg-slate-50 p-2 leading-relaxed text-slate-600">
-                  {highlightExample(data.example_sentences[0], display, data.word)}
+                  {highlightExample(shown.example_sentences[0], display, shown.word)}
                 </p>
               ) : null}
             </>
           )}
 
-          {data.meaning_in_context ? (
+          {shown.meaning_in_context ? (
             <p className="rounded-lg bg-brand-50 p-2 leading-relaxed text-slate-600">
               <span className="font-medium text-brand-700">语境 </span>
-              {data.meaning_in_context}
+              {shown.meaning_in_context}
             </p>
           ) : null}
 
-          {data.collocations.length > 0 ? (
+          {shown.collocations.length > 0 ? (
             <div className="flex flex-wrap gap-1">
-              {data.collocations.map((item) => (
+              {shown.collocations.map((item) => (
                 <span key={item} className="chip-brand">
                   {item}
                 </span>
               ))}
             </div>
+          ) : null}
+
+          {slowPending ? (
+            <p className="text-[11px] text-slate-400">
+              AI 正在补充本句用法…
+            </p>
           ) : null}
         </div>
       )}
@@ -245,7 +275,7 @@ export function WordPopover({
         </button>
         <button
           onClick={handleSave}
-          disabled={saved || !data || (data.core_meanings.length === 0 && senses.length === 0)}
+          disabled={saved || !shown || (shown.core_meanings.length === 0 && senses.length === 0)}
           className="btn-primary flex-1 !py-2 text-xs"
         >
           {saved ? "已加入词库" : "⭐ 加入词库"}

@@ -23,7 +23,12 @@ def explain_word(
     provider=Depends(get_user_provider),
 ) -> WordExplanationOut:
     result = content_service.explain_word(
-        payload.text.strip(), payload.context or payload.text, user.cefr_level, db, provider
+        payload.text.strip(),
+        payload.context or payload.text,
+        user.cefr_level,
+        db,
+        provider,
+        fast=payload.fast,
     )
     return WordExplanationOut.model_validate(result)
 
