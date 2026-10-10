@@ -73,6 +73,19 @@ class WordSense(BaseModel):
     example: str = ""
 
 
+class WordLookup(BaseModel):
+    """划词查词让模型真正生成的最小结构。
+
+    字段越少，模型吐出的 token 越少、返回越快；完整字段由 VocabularyAgent
+    在本结构基础上补齐，接口对外仍然是 WordExplanation。
+    """
+
+    word: str = ""
+    pronunciation: str = ""
+    meaning_in_context: str = ""
+    senses: list[WordSense] = Field(default_factory=list)
+
+
 class WordExplanation(BaseModel):
     word: str
     pronunciation: str = ""

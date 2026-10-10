@@ -3,10 +3,31 @@ import logging
 from app.ai import rule_engine
 from app.ai.prompts import render_prompt
 from app.ai.provider import AIProvider, AIProviderError, get_provider
-from app.ai.schemas import WordExplanation
+from app.ai.schemas import WordExplanation, WordLookup
 from app.core.cache import cache_key, get_cache
 
 logger = logging.getLogger(__name__)
+
+
+def _expand_lookup(
+    lookup: WordLookup, fallback_word: str, cefr_level: str
+) -> WordExplanation:
+    """把模型的精简结果补齐成完整的 WordExplanation（接口对外形状不变）。"""
+    senses = [sense.model_dump() for sense in lookup.senses]
+    meanings = [sense.meaning for sense in lookup.senses if sense.meaning.strip()]
+    examples = [sense.example for sense in lookup.senses if sense.example.strip()]
+    return WordExplanation(
+        word=lookup.word or fallback_word.strip().lower(),
+        pronunciation=lookup.pronunciation,
+        part_of_speech=lookup.senses[0].part_of_speech if lookup.senses else "",
+        core_meanings=meanings,
+        meaning_in_context=lookup.meaning_in_context,
+        collocations=[],
+        example_sentences=examples,
+        related_words=[],
+        cefr_level=cefr_level,
+        senses=senses,
+    )
 
 
 class VocabularyAgent:
@@ -19,7 +40,7 @@ class VocabularyAgent:
     ) -> WordExplanation:
         cleaned = word.strip().lower()
         key = cache_key(
-            "word", "v3", cefr_level, cleaned, context.strip(), self.provider.signature
+            "word", "v4", cefr_level, cleaned, context.strip(), self.provider.signature
         )
         cached = self.cache.get(key)
         if cached:
@@ -40,12 +61,13 @@ class VocabularyAgent:
                 )
                 raw = self.provider.complete_json_fast(
                     system,
-                    f"Explain the word: {word}",
-                    WordExplanation,
-                    max_tokens=800,
+                    f"Explain: {word}",
+                    WordLookup,
+                    max_tokens=400,
                 )
                 if raw:
-                    return WordExplanation.model_validate(raw), True
+                    lookup = WordLookup.model_validate(raw)
+                    return _expand_lookup(lookup, word, cefr_level), True
             except (AIProviderError, ValueError) as exc:
                 logger.warning("VocabularyAgent 模型调用失败，降级到词典：%s", exc)
                 return self._offline_explain(word, context, cefr_level), False
