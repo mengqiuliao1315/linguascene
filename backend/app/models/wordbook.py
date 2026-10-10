@@ -27,6 +27,7 @@ class Wordbook(Base):
     name: Mapped[str] = mapped_column(String(128))
     name_zh: Mapped[str] = mapped_column(String(128), default="")
     description: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(Text, default="")
     icon: Mapped[str] = mapped_column(String(16), default="📘")
     level: Mapped[str] = mapped_column(String(8), default="B1")
     word_count: Mapped[int] = mapped_column(Integer, default=0)

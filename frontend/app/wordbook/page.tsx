@@ -70,6 +70,7 @@ function StudyScreen() {
   };
 
   const word = queue[0];
+  const currentBook = books.find((item) => item.code === book);
 
   useEffect(() => {
     if (loading || !word) return;
@@ -154,6 +155,12 @@ function StudyScreen() {
           </button>
         ))}
       </div>
+
+      {currentBook?.source ? (
+        <p className="px-1 text-xs leading-relaxed text-slate-400">
+          来源：{currentBook.source}
+        </p>
+      ) : null}
 
       <div className="card space-y-3 p-4">
         <div className="flex items-center gap-2">

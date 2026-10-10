@@ -86,6 +86,7 @@ def _seed_wordbooks_impl(db: Session) -> dict:
         row.name = book["name"]
         row.name_zh = book["name_zh"]
         row.description = book["description"]
+        row.source = book.get("source", "")
         row.icon = book["icon"]
         row.level = book["level"]
         row.order_index = book.get("order_index", index)

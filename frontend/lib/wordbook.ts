@@ -61,6 +61,7 @@ export interface Wordbook {
   name: string;
   name_zh: string;
   description: string;
+  source: string;
   icon: string;
   level: string;
   word_count: number;

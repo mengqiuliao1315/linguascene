@@ -375,6 +375,7 @@ def list_books(db: Session, user: User | None = None) -> list[dict]:
                 "name": book.name,
                 "name_zh": book.name_zh,
                 "description": book.description,
+                "source": book.source,
                 "icon": book.icon,
                 "level": book.level,
                 "word_count": book.word_count,
