@@ -2,17 +2,6 @@ import { request } from "./api";
 
 export type PetMood = "excited" | "delighted" | "happy" | "waiting" | "sad";
 
-export interface PetSpecies {
-  id: string;
-  label: string;
-  emoji: string;
-  tagline: string;
-}
-
-export const PET_SPECIES: PetSpecies[] = [
-  { id: "hedgehog", label: "墩墩", emoji: "🦔", tagline: "圆滚滚一团软刺，等你回来" },
-];
-
 export const DEFAULT_PET_NAME = "墩墩";
 
 export interface PetState {
