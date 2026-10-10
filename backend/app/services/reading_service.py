@@ -376,6 +376,8 @@ def _iter_analyses(
     segments: list[tuple[int, str]],
     level: str,
     title: str,
+    *,
+    fast: bool = False,
 ) -> Iterator[tuple[int, object, bool]]:
     if not segments:
         return
@@ -384,11 +386,13 @@ def _iter_analyses(
 
     chunks: list[list[int]] = _chunk_indexes(len(segments), batch_size)
 
+    supports_fast = "fast" in signature(agent.analyze_batch_with_status).parameters
+
     def run(chunk: list[int]) -> list[tuple[int, object, bool]]:
         texts = [segments[i][1] for i in chunk]
-        if chunk == [0] and "fast" in signature(
-            agent.analyze_batch_with_status
-        ).parameters:
+        # 流式路径（fast=True）全部走单次尝试，避免服务商超时后逐句重试把首屏拖到几分钟；
+        # 非流式（导出 PDF 等）保持默认多次重试以保质量。
+        if supports_fast and (fast or chunk == [0]):
             batched = agent.analyze_batch_with_status(
                 texts, level, context=title, fast=True
             )
@@ -422,8 +426,12 @@ def _iter_sentence_payloads(
     level: str,
     title: str,
     known: set[str],
+    *,
+    fast: bool = False,
 ) -> Iterator[tuple[int, dict, bool]]:
-    for index, analysis, from_model in _iter_analyses(agent, segments, level, title):
+    for index, analysis, from_model in _iter_analyses(
+        agent, segments, level, title, fast=fast
+    ):
         paragraph, text = segments[index]
         yield index, _sentence_payload(index, paragraph, text, analysis, known), from_model
 
@@ -528,7 +536,7 @@ def stream_analysis(
         by_index: dict[int, dict] = {}
         model_hits = 0
         for index, payload, from_model in _iter_sentence_payloads(
-            agent, segments, document.level, document.title, known
+            agent, segments, document.level, document.title, known, fast=True
         ):
             model_hits += 1 if from_model else 0
             by_index[index] = payload

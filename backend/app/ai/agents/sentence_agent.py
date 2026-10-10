@@ -162,7 +162,12 @@ class SentenceAgent:
             )
             base_tokens = getattr(self.provider, "max_tokens", 1500) or 1500
             batch_tokens = min(base_tokens * len(pending), 8000)
-            raw = self.provider.complete_json(
+            complete = (
+                self.provider.complete_json_fast
+                if fast
+                else self.provider.complete_json
+            )
+            raw = complete(
                 system,
                 f"Analyze these {len(pending)} sentences.",
                 SentenceBatch,
@@ -186,20 +191,32 @@ class SentenceAgent:
                 len(pending),
             )
         except (AIProviderError, ValueError, TypeError) as exc:
-            getattr(get_batch_tuner(), f"note_{classify_error(exc)}")()
-            logger.warning("批量逐句分析失败，降级为逐句调用：%s", exc)
+            kind = classify_error(exc)
+            getattr(get_batch_tuner(), f"note_{kind}")()
+            logger.warning("批量逐句分析失败（%s），降级：%s", kind, exc)
+            if kind == "timeout":
+                # 服务商持续超时时再逐句重试，只会把等待时间成倍拉长（每句又是一整轮重试），
+                # 直接把这一批交给本地规则引擎，保证流式返回尽快出内容。
+                return [
+                    (index, self._offline_analyze(sentence, cefr_level), False)
+                    for index, sentence in pending
+                ]
 
-        return self._analyze_pending_one_by_one(pending, cefr_level, context)
+        return self._analyze_pending_one_by_one(pending, cefr_level, context, fast=fast)
 
     def _analyze_pending_one_by_one(
         self,
         pending: list[tuple[int, str]],
         cefr_level: str,
         context: str,
+        *,
+        fast: bool = False,
     ) -> list[tuple[int, SentenceAnalysis, bool]]:
         resolved: list[tuple[int, SentenceAnalysis, bool]] = []
         for index, sentence in pending:
-            analysis, from_model = self._analyze_uncached(sentence, cefr_level, context)
+            analysis, from_model = self._analyze_uncached(
+                sentence, cefr_level, context, fast=fast
+            )
             if from_model:
                 key = cache_key(
                     "sentence", "v2", cefr_level, sentence, self.provider.signature
