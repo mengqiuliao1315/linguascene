@@ -217,6 +217,15 @@ body {
       padding-bottom: 1.5rem;
     }
   }
+
+  /* 手机底部标签栏左右拖动时不要露出滚动条 */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* 帖子正文（Markdown 渲染结果）：图片自适应卡片宽度，链接保持蓝白基调。 */

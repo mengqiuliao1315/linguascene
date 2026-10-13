@@ -58,7 +58,7 @@ function DashboardContent() {
 
   return (
     <div className="space-y-8">
-      <section className="card flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+      <section className="card flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
         <div className="space-y-3">
           <h1 className="text-xl font-semibold text-slate-900">
             {greeting || data.greeting}, {data.username} 👋
@@ -113,24 +113,30 @@ function DashboardContent() {
         {data.today_mission ? (
           <Link
             href={`/scenarios/${data.today_mission.id}`}
-            className="card flex items-center gap-5 p-6 transition hover:border-brand-300 hover:shadow-lg"
+            className="card flex flex-col gap-4 p-5 transition hover:border-brand-300 hover:shadow-lg sm:flex-row sm:items-center sm:gap-5 sm:p-6"
           >
-            <span className="text-4xl">{data.today_mission.icon}</span>
-            <div className="flex-1">
-              <p className="text-lg font-semibold text-slate-900">
-                {data.today_mission.title}
-              </p>
-              <p className="text-sm text-slate-500">
-                {data.today_mission.title_zh} · {data.today_mission.ai_role}
-              </p>
-              <div className="mt-2 flex gap-2">
-                <span className="chip-slate">
-                  {data.today_mission.estimated_minutes} min
-                </span>
-                <span className="chip-slate">{data.today_mission.level}</span>
+            <div className="flex min-w-0 items-center gap-4 sm:gap-5">
+              <span className="shrink-0 text-4xl">
+                {data.today_mission.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-lg font-semibold text-slate-900">
+                  {data.today_mission.title}
+                </p>
+                <p className="text-sm text-slate-500">
+                  {data.today_mission.title_zh} · {data.today_mission.ai_role}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="chip-slate">
+                    {data.today_mission.estimated_minutes} min
+                  </span>
+                  <span className="chip-slate">{data.today_mission.level}</span>
+                </div>
               </div>
             </div>
-            <span className="btn-primary">Start</span>
+            <span className="btn-primary w-full shrink-0 sm:w-auto">
+              Start
+            </span>
           </Link>
         ) : (
           <EmptyState text="全部场景已完成" />

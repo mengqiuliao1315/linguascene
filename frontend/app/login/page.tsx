@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ErrorText, Modal } from "@/components/ui";
 import { BASE_PATH } from "@/lib/api";
@@ -15,6 +15,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [siteUrl, setSiteUrl] = useState("");
+
+  // 手机上没法扫自己屏幕上的二维码，弹窗改为直接显示网址。
+  // 地址取运行时真实访问地址，换域名/IP 访问也不会写错。
+  useEffect(() => {
+    setSiteUrl(`${window.location.origin}${BASE_PATH}`);
+  }, []);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -121,15 +128,27 @@ export default function LoginPage() {
         maxWidth="max-w-xs"
       >
         <div className="flex flex-col items-center gap-3">
-          {/* 二维码为构建期生成的静态资源，扫码直达 APK 下载地址 */}
+          {/* 桌面端：二维码指向 APK，用手机扫码装客户端 */}
+          {/* 二维码为构建期生成的静态资源 */}
           <img
             src={`${BASE_PATH}/download/qr-apk.svg`}
             alt="扫码下载 LinguaScene Android 安装包"
-            className="h-44 w-44 rounded-xl border border-slate-200 bg-white p-2"
+            className="hidden h-44 w-44 rounded-xl border border-slate-200 bg-white p-2 md:block"
           />
-          <p className="text-center text-xs leading-relaxed text-slate-500">
+          <p className="hidden text-center text-xs leading-relaxed text-slate-500 md:block">
             用手机扫码下载安装包。若系统提示「未知来源」，请允许本次安装。
           </p>
+
+          {/* 手机端：扫不了自己的屏幕，直接给网址 */}
+          <div className="w-full space-y-2 md:hidden">
+            <p className="text-center text-xs text-slate-500">
+              网页版地址，用手机浏览器直接打开
+            </p>
+            <p className="break-all rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center font-mono text-xs text-slate-700">
+              {siteUrl || "…"}
+            </p>
+          </div>
+
           <a href={APK_PATH} download className="btn-primary w-full">
             直接下载安装包
           </a>

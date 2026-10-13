@@ -2,45 +2,42 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
-import { Avatar, Modal } from "@/components/ui";
+import { Avatar } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 
 const NAV = [
-  { href: "/dashboard", label: "首页" },
-  { href: "/scenarios", label: "场景" },
-  { href: "/chat", label: "AI Tutor" },
-  { href: "/reading", label: "精读" },
-  { href: "/wordbook", label: "词书" },
-  { href: "/vocabulary", label: "词库" },
-  { href: "/leaderboard", label: "排行榜" },
-  { href: "/forum", label: "论坛" },
-  { href: "/friends", label: "好友" },
-  { href: "/settings/ai", label: "AI 模型" },
-];
-
-// 手机底部标签栏：只保留最高频入口，其余收进「更多」，
-// 避免把桌面端 10 项横向滚动导航原样塞进小屏。
-const MOBILE_TABS = [
   { href: "/dashboard", label: "首页", icon: "🏠" },
   { href: "/scenarios", label: "场景", icon: "🎬" },
   { href: "/chat", label: "AI Tutor", icon: "💬" },
   { href: "/reading", label: "精读", icon: "📖" },
+  { href: "/wordbook", label: "词书", icon: "📚" },
+  { href: "/vocabulary", label: "词库", icon: "🔤" },
+  { href: "/leaderboard", label: "排行榜", icon: "🏆" },
+  { href: "/forum", label: "论坛", icon: "🗣️" },
+  { href: "/friends", label: "好友", icon: "👥" },
+  { href: "/settings/ai", label: "AI 模型", icon: "🤖" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const [moreOpen, setMoreOpen] = useState(false);
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   const nav =
     user?.role === "ADMIN"
-      ? [...NAV, { href: "/admin", label: "管理" }]
+      ? [...NAV, { href: "/admin", label: "管理", icon: "🛠️" }]
       : NAV;
 
   const isActive = (href: string) =>
     pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+
+  // 手机底部导航全部入口平铺、左右拖动查看，所以要保证当前页那一项在可视区内。
+  useEffect(() => {
+    const current = tabsRef.current?.querySelector('[data-active="true"]');
+    current?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [pathname]);
 
   return (
     <div className="min-h-dvh bg-slate-50">
@@ -97,64 +94,30 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <main className="mx-auto max-w-6xl px-4 py-6 pb-safe-nav">{children}</main>
 
+      {/* 手机底部标签栏：全部入口平铺，一屏放不下的左右拖动查看；
+          最右侧会露出下一项的一角，提示还能继续滑 */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-safe backdrop-blur md:hidden">
-        <div className="mx-auto flex max-w-6xl">
-          {MOBILE_TABS.map((tab) => {
-            const active = isActive(tab.href);
+        <div ref={tabsRef} className="scrollbar-none flex overflow-x-auto">
+          {nav.map((item) => {
+            const active = isActive(item.href);
             return (
               <Link
-                key={tab.href}
-                href={tab.href}
-                className={`flex flex-1 flex-col items-center gap-0.5 py-2 ${
+                key={item.href}
+                href={item.href}
+                data-active={active}
+                className={`flex shrink-0 flex-col items-center gap-0.5 px-3.5 py-2 ${
                   active ? "text-brand-600" : "text-slate-400"
                 }`}
               >
-                <span className="text-lg leading-none">{tab.icon}</span>
-                <span className="text-[11px] font-medium">{tab.label}</span>
+                <span className="text-lg leading-none">{item.icon}</span>
+                <span className="whitespace-nowrap text-[11px] font-medium">
+                  {item.label}
+                </span>
               </Link>
             );
           })}
-          <button
-            type="button"
-            onClick={() => setMoreOpen(true)}
-            className="flex flex-1 flex-col items-center gap-0.5 py-2 text-slate-400"
-          >
-            <span className="text-lg leading-none">⋯</span>
-            <span className="text-[11px] font-medium">更多</span>
-          </button>
         </div>
       </nav>
-
-      <Modal
-        open={moreOpen}
-        onClose={() => setMoreOpen(false)}
-        title="更多功能"
-        maxWidth="max-w-sm"
-      >
-        <div className="grid grid-cols-2 gap-2">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMoreOpen(false)}
-              className={`rounded-xl border px-3 py-2.5 text-sm transition ${
-                isActive(item.href)
-                  ? "border-brand-200 bg-brand-50 font-medium text-brand-700"
-                  : "border-slate-200 text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={logout}
-          className="btn-ghost w-full"
-        >
-          退出登录
-        </button>
-      </Modal>
     </div>
   );
 }

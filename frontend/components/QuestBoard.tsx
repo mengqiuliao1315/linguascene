@@ -179,9 +179,9 @@ export function QuestBoard({ compact = false }: { compact?: boolean }) {
                 />
               ) : (
                 <span
-                  className={
+                  className={`min-w-0 flex-1 ${
                     quest.completed ? "text-slate-400 line-through" : "text-slate-700"
-                  }
+                  }`}
                 >
                   {quest.label}
                 </span>
