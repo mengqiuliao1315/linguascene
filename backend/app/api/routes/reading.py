@@ -167,10 +167,10 @@ def get_material(
 ) -> MaterialDetailOut:
     document = _resolve_document(db, user, kind, material_id)
 
-    sentences: list[dict] = reading_service.stored_sentences(document)
+    sentences: list[dict] = reading_service.stored_sentences(db, document)
 
     if not sentences:
-        builtin = reading_service.builtin_sentences(document)
+        builtin = reading_service.builtin_sentences(db, document)
         if builtin:
             sentences = builtin
             reading_service._store_sentences(

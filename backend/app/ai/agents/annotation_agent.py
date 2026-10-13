@@ -73,6 +73,12 @@ class AnnotationAgent:
                 continue
             if index == 0 and len(text) >= len(sentence):
                 continue
+            # 模型偶尔会返回原形（degraded 写成 degrade），直接切会把词拦腰截断，
+            # 批注里就会留下一个句子里并不存在的词，这里要求命中处两侧是词边界。
+            before = sentence[index - 1] if index > 0 else ""
+            after = sentence[index + len(text)] if index + len(text) < len(sentence) else ""
+            if before.isalpha() or after.isalpha():
+                continue
             color = span.color if span.color in _ALLOWED_COLORS else "blue"
             kept.append(
                 SuggestedSpan(

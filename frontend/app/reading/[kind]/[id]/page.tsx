@@ -516,6 +516,7 @@ function Workspace() {
     noteKind: "word" | "phrase" | "note",
     text: string,
     options: {
+      lemma?: string;
       meaning?: string;
       note?: string;
       color?: NoteColor;
@@ -536,6 +537,7 @@ function Workspace() {
         sentence_index: sentenceIndex,
         kind: noteKind,
         text: clean,
+        lemma: options.lemma ?? "",
         meaning: options.meaning ?? "",
         note: options.note ?? "",
         color: options.color ?? "blue",
@@ -1186,24 +1188,28 @@ function Workspace() {
                           className="inline-flex items-center rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs"
                         >
                           <span className="font-medium text-slate-800">
-                            {word.lemma || word.word}
+                            {word.word}
                           </span>
                           {word.lemma && word.lemma !== word.word ? (
-                            <span className="ml-1 text-slate-400">({word.word})</span>
+                            <span className="ml-1 text-slate-400">
+                              原形 {word.lemma}
+                            </span>
                           ) : null}
                           {word.meaning ? (
                             <span className="ml-1.5 text-slate-500">{word.meaning}</span>
                           ) : null}
                           <AddButton
                             title="加入本页笔记"
-                            active={alreadyNoted(sentence.index, word.lemma || word.word)}
+                            active={
+                              alreadyNoted(sentence.index, word.word) ||
+                              alreadyNoted(sentence.index, word.lemma)
+                            }
                             onClick={() =>
-                              void addNote(
-                                sentence.index,
-                                "word",
-                                word.lemma || word.word,
-                                { meaning: word.meaning, color: "blue" }
-                              )
+                              void addNote(sentence.index, "word", word.word, {
+                                lemma: word.lemma,
+                                meaning: word.meaning,
+                                color: "blue",
+                              })
                             }
                           />
                         </span>

@@ -273,6 +273,7 @@ export const readingApi = {
       sentence_index: number;
       kind: NoteKind;
       text: string;
+      lemma?: string;
       meaning?: string;
       note?: string;
       color?: NoteColor;

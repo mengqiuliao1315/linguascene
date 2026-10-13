@@ -127,6 +127,8 @@ def lemmatize(word: str, known: set[str] | None = None) -> str:
 
     if len(cleaned) > 4 and cleaned.endswith("ies"):
         candidates.append(cleaned[:-3] + "y")
+    if len(cleaned) > 4 and cleaned.endswith("ied"):
+        candidates.append(cleaned[:-3] + "y")
     if len(cleaned) > 4 and cleaned.endswith("es"):
         candidates.append(cleaned[:-1])
         candidates.append(cleaned[:-2])
@@ -140,8 +142,14 @@ def lemmatize(word: str, known: set[str] | None = None) -> str:
     if len(cleaned) > 4 and cleaned.endswith("ed"):
         if cleaned[-3] == cleaned[-4] and cleaned[-3] not in "aeiou":
             candidates.append(cleaned[:-3])
-        candidates.append(cleaned[:-1])
-        candidates.append(cleaned[:-2])
+        # 有词表时先试直接去掉 -ed 的原形（deforested→deforest），词表会挡掉 creat、chang 这类假词；
+        # 没有词表时保持旧顺序，避免把 created 削成 creat。
+        if known:
+            candidates.append(cleaned[:-2])
+            candidates.append(cleaned[:-1])
+        else:
+            candidates.append(cleaned[:-1])
+            candidates.append(cleaned[:-2])
 
 
     candidates = [c for c in candidates if len(c) >= 3]
@@ -172,6 +180,56 @@ def lemma_for(word: str, known: set[str] | None = None) -> str:
     if known and raw.lower() in known:
         return raw.lower()
     return lemmatize(raw, known)
+
+
+_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
+
+
+def hint_lemma(form: str, known: set[str] | None = None) -> str:
+    """回原形，但只在拿得准的时候回，否则宁可不显示，免得冒出 hundr、deforeste 这种假词。"""
+    lemma = lemma_for(form, known)
+    if not lemma or lemma == form.lower():
+        return ""
+    if known and lemma not in known:
+        return ""
+    return lemma
+
+
+def align_vocab_word(
+    text: str, word: str, known: set[str] | None = None
+) -> tuple[str, str]:
+    """把重点单词对齐回句子里真实出现的形式，返回 (句中写法, 原形)。
+
+    模型经常直接给原形（把句中的 degraded 写成 degrade、wrote 写成 write），
+    照着记批注就会出现“词在句里明明是形容词，却只存下动词原形”的问题。
+    """
+    candidate = (word or "").strip()
+    if not candidate:
+        return "", ""
+    if " " in candidate:
+        return candidate, ""
+    lowered = candidate.lower()
+    tokens = _TOKEN_RE.findall(text or "")
+    for token in tokens:
+        if token.lower() == lowered:
+            return token, hint_lemma(token, known)
+    for token in tokens:
+        if lemma_for(token, known) == lowered:
+            return token, lowered
+    return candidate, hint_lemma(candidate, known)
+
+
+def normalize_words(
+    sentences: list[dict], known: set[str] | None = None
+) -> list[dict]:
+    """把句子里的重点单词统一成“句中写法 + 原形”，旧缓存也按现在的规则过一遍。"""
+    for sentence in sentences:
+        text = sentence.get("text") or ""
+        for word in sentence.get("words") or []:
+            surface, lemma = align_vocab_word(text, word.get("word") or "", known)
+            word["word"] = surface or word.get("word") or ""
+            word["lemma"] = lemma
+    return sentences
 
 
 def _fallback_words(sentence: str, known: set[str], limit: int = 3) -> list[dict]:
@@ -267,11 +325,12 @@ def load_document(
     )
 
 
-def builtin_sentences(document: Document) -> list[dict] | None:
-    return build_sentences(document.title, split_sentences(document.body))
+def builtin_sentences(db: Session, document: Document) -> list[dict] | None:
+    builtin = build_sentences(document.title, split_sentences(document.body))
+    return normalize_words(builtin, _dictionary_words(db)) if builtin else None
 
 
-def stored_sentences(document: Document) -> list[dict]:
+def stored_sentences(db: Session, document: Document) -> list[dict]:
     if not document.cached_sentences:
         return []
     try:
@@ -282,7 +341,7 @@ def stored_sentences(document: Document) -> list[dict]:
         return []
     if len(cached) != len(split_sentences(document.body)):
         return []
-    return cached
+    return normalize_words(cached, _dictionary_words(db))
 
 
 def _reusable_sentences(
@@ -294,13 +353,14 @@ def _reusable_sentences(
 ) -> list[dict] | None:
     builtin = build_sentences(document.title, segments)
     if builtin:
+        builtin = normalize_words(builtin, _dictionary_words(db))
         blob = json.dumps(builtin, ensure_ascii=False)
         if document.cached_sentences != blob:
             _store_sentences(db, document, blob)
         return builtin
 
     if not force:
-        cached = stored_sentences(document)
+        cached = stored_sentences(db, document)
         if cached:
             return cached
 
@@ -319,10 +379,10 @@ def _sentence_payload(
         raw = item.word if hasattr(item, "word") else item.get("word", "")
         if not raw:
             continue
-        lemma = lemma_for(raw, known)
+        surface, lemma = align_vocab_word(text, raw, known)
         words.append(
             {
-                "word": raw,
+                "word": surface,
                 "lemma": lemma,
                 "meaning": item.meaning if hasattr(item, "meaning") else item.get("meaning", ""),
                 "phonetic": getattr(item, "phonetic", "") or "",
