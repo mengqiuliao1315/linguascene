@@ -284,18 +284,20 @@ export function WordPopover({
       ) : null}
 
       <div className="mt-3 flex items-center gap-2">
-        <button
-          onClick={handleAnnotate}
-          disabled={!canAnnotate || noting || !onAddNote}
-          title="把这个词和它的释义记到本页批注"
-          className={`flex-1 rounded-xl px-3 py-2 text-xs transition ${
-            canAnnotate
-              ? "border border-slate-200 text-slate-600 hover:border-brand-300 hover:text-brand-700"
-              : "bg-slate-100 text-slate-400"
-          }`}
-        >
-          {!canAnnotate ? "已加入批注" : noting ? "加入中…" : "✏️ 加入批注"}
-        </button>
+        {onAddNote ? (
+          <button
+            onClick={handleAnnotate}
+            disabled={!canAnnotate || noting}
+            title="把这个词和它的释义记到本页批注"
+            className={`flex-1 rounded-xl px-3 py-2 text-xs transition ${
+              canAnnotate
+                ? "border border-slate-200 text-slate-600 hover:border-brand-300 hover:text-brand-700"
+                : "bg-slate-100 text-slate-400"
+            }`}
+          >
+            {!canAnnotate ? "已加入批注" : noting ? "加入中…" : "✏️ 加入批注"}
+          </button>
+        ) : null}
         <button
           onClick={handleSave}
           disabled={saved || !shown || (shown.core_meanings.length === 0 && senses.length === 0)}
