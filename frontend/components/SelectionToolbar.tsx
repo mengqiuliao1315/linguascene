@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
   COLOR_DOTS,
@@ -54,16 +54,18 @@ export function SelectionToolbar({
   }, [onClose]);
 
   const above = selection.y > 140;
-  const viewportWidth =
-    typeof window === "undefined" ? 1024 : window.innerWidth;
-  // 浮层以选中位置为中心，留边要按自身半宽算，否则贴到屏幕两侧会被切掉。
-  // 菜单模式是一排小按钮（约 260px 宽），写笔记模式是最多 18rem 的输入区。
-  const halfWidth =
-    mode === "note" ? Math.min(144, (viewportWidth - 24) / 2) : 130;
-  const left = Math.min(
-    Math.max(selection.x, halfWidth),
-    Math.max(viewportWidth - halfWidth, halfWidth)
-  );
+  // 浮层以选中位置为中心，左右留边。按钮 nowrap 后实际宽度会随内容变化，
+  // 不能再用写死的半宽估算，渲染后按真实宽度重算一次居中位置。
+  const [left, setLeft] = useState(selection.x);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const vw = window.innerWidth;
+    const half = box.offsetWidth / 2 + 6;
+    setLeft(
+      Math.min(Math.max(selection.x, half), Math.max(vw - half, half))
+    );
+  }, [selection.x, selection.y, mode]);
 
   return (
     <div
@@ -90,14 +92,14 @@ export function SelectionToolbar({
           <button
             type="button"
             onClick={onLookup}
-            className="rounded-lg px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100"
+            className="whitespace-nowrap rounded-lg px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100"
           >
             查词
           </button>
           <button
             type="button"
             onClick={() => setMode("note")}
-            className="rounded-lg px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100"
+            className="whitespace-nowrap rounded-lg px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-100"
           >
             写笔记
           </button>

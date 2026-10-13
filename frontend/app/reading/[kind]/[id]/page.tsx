@@ -233,6 +233,7 @@ function HighlightedSentence({
   return (
     <p
       ref={ref}
+      data-sentence-index={sentence.index}
       onMouseUp={handleMouseUp}
       className="text-[15px] leading-8 text-slate-800"
     >
@@ -431,6 +432,38 @@ function Workspace() {
     if (text.split(/\s+/).length !== 1) return;
     prefetchSpeech(text);
   }, [selection, muted, speechReady]);
+
+  // 触屏/电容笔划词：移动端长按选词没有可靠的 mouseup（拖动手柄时根本不会触发），
+  // 改为监听 selectionchange，选区稳定 350ms 且落在某句正文里就弹出划词工具条。
+  useEffect(() => {
+    const coarse =
+      "ontouchstart" in window ||
+      (window.matchMedia?.("(pointer: coarse)").matches ?? false);
+    if (!coarse) return;
+    let timer: number | null = null;
+    function onSelectionChange() {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+        const node = sel.anchorNode;
+        const el = node instanceof Element ? node : node?.parentElement;
+        const p = el?.closest("p[data-sentence-index]");
+        if (!(p instanceof HTMLElement)) return;
+        const found = selectionOffsets(p);
+        if (!found) return;
+        setSelection({
+          ...found,
+          sentenceIndex: Number(p.dataset.sentenceIndex),
+        });
+      }, 350);
+    }
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, []);
 
   const allNotes = useMemo(
     () => sentences.flatMap((s) => s.notes).sort((a, b) => a.id - b.id),
@@ -915,43 +948,60 @@ function Workspace() {
 
   return (
     <div className="space-y-4">
-      <div className="card flex flex-wrap items-center gap-3 p-3 sm:p-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-base font-semibold text-slate-900">{material.title}</h1>
-          <p className="text-xs text-slate-400">
-            {material.author_name} · {material.level} · {material.word_count} words
-            {material.source === "shared" ? " · 他人分享" : ""}
-          </p>
+      <div className="card space-y-3 p-3 sm:p-4">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-base font-semibold leading-snug text-slate-900">
+              {material.title}
+            </h1>
+            <p className="mt-1 text-xs text-slate-400">
+              {material.author_name} · {material.level} · {material.word_count} words
+              {material.source === "shared" ? " · 他人分享" : ""}
+            </p>
+          </div>
+          {sentences.length > 0 && ttsSupported ? (
+            <button
+              onClick={() => setMuted(!muted)}
+              title={muted ? "开启朗读声音" : "关闭朗读声音"}
+              aria-label={muted ? "开启朗读声音" : "关闭朗读声音"}
+              className={`btn-ghost shrink-0 !p-2 text-sm ${muted ? "!text-slate-400" : ""}`}
+            >
+              {muted ? "🔇" : "🔊"}
+            </button>
+          ) : null}
         </div>
 
         {sentences.length === 0 ? (
           <button
             onClick={() => void handleAnalyze()}
             disabled={analyzing}
-            className="btn-primary !py-2 text-sm"
+            className="btn-primary w-full !py-2 text-sm sm:w-auto"
           >
             {analyzing ? "分析中…" : "生成逐句讲解"}
           </button>
         ) : (
-          <>
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
             <button
               onClick={() => {
                 setRecallMode((prev) => !prev);
                 setRevealed(new Set());
               }}
-              className={`!py-2 text-sm ${recallMode ? "btn-primary" : "btn-ghost"}`}
+              className={`!px-2 !py-2 text-sm sm:!px-4 ${recallMode ? "btn-primary" : "btn-ghost"}`}
             >
               {recallMode ? "退出复习" : "遮罩复习"}
             </button>
             {recallMode ? (
-              <button onClick={handleRevealAll} className="btn-ghost !py-2 text-sm">
+              <button
+                onClick={handleRevealAll}
+                className="btn-ghost !px-2 !py-2 text-sm sm:!px-4"
+              >
                 全部揭示
               </button>
             ) : null}
             <button
               onClick={handleSuggest}
               disabled={suggesting}
-              className="btn-ghost !py-2 text-sm"
+              className="btn-ghost !px-2 !py-2 text-sm sm:!px-4"
             >
               {suggesting
                 ? suggestProgress
@@ -962,36 +1012,27 @@ function Workspace() {
             <button
               onClick={() => void handleAnalyze(true)}
               disabled={analyzing}
-              className="btn-ghost !py-2 text-sm"
+              className="btn-ghost !px-2 !py-2 text-sm sm:!px-4"
             >
               {analyzing ? "重新分析中…" : "重新分析"}
             </button>
-            {ttsSupported ? (
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="btn-primary !px-2 !py-2 text-sm sm:!px-4"
+            >
+              {exporting ? "导出中…" : "导出 PDF"}
+            </button>
+            {canManage ? (
               <button
-                onClick={() => setMuted(!muted)}
-                title={muted ? "开启朗读声音" : "关闭朗读声音"}
-                aria-label={muted ? "开启朗读声音" : "关闭朗读声音"}
-                className={`btn-ghost !py-2 text-sm ${muted ? "!text-slate-400" : ""}`}
+                onClick={handlePublish}
+                className="btn-ghost !px-2 !py-2 text-sm sm:!px-4"
               >
-                {muted ? "🔇" : "🔊"}
+                {material.is_public ? "取消公布" : "公布给大家"}
               </button>
             ) : null}
-          </>
+          </div>
         )}
-
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="btn-primary !py-2 text-sm"
-        >
-          {exporting ? "导出中…" : "导出 PDF"}
-        </button>
-
-        {canManage ? (
-          <button onClick={handlePublish} className="btn-ghost !py-2 text-sm">
-            {material.is_public ? "取消公布" : "公布给大家"}
-          </button>
-        ) : null}
       </div>
 
       {error ? (
