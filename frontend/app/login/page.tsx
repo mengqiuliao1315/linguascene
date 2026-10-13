@@ -119,9 +119,14 @@ export default function LoginPage() {
               📱 下载 Android 客户端
             </button>
             {/* 移动端：已经在手机上，直接展示网页地址，不再引导装包 */}
-            <p className="break-all text-center font-mono text-xs text-slate-400 md:hidden">
-              {siteUrl || "https://forddream.icu/linguascene"}
-            </p>
+            <div className="space-y-1 md:hidden">
+              <p className="text-center text-xs text-slate-400">
+                网页版地址，用手机浏览器打开
+              </p>
+              <p className="break-all text-center font-mono text-xs text-slate-500">
+                {siteUrl || "https://forddream.icu/linguascene"}
+              </p>
+            </div>
           </div>
         </form>
       </div>
