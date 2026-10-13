@@ -110,13 +110,18 @@ export default function LoginPage() {
             <p className="text-center text-xs text-slate-400">
               账号由管理员统一开通
             </p>
+            {/* 桌面端：给出 Android 客户端下载入口（点开扫码） */}
             <button
               type="button"
               onClick={() => setQrOpen(true)}
-              className="text-xs text-slate-400 underline decoration-slate-200 underline-offset-2 transition hover:text-brand-600"
+              className="hidden text-xs text-slate-400 underline decoration-slate-200 underline-offset-2 transition hover:text-brand-600 md:inline"
             >
               📱 下载 Android 客户端
             </button>
+            {/* 移动端：已经在手机上，直接展示网页地址，不再引导装包 */}
+            <p className="break-all text-center font-mono text-xs text-slate-400 md:hidden">
+              {siteUrl || "https://forddream.icu/linguascene"}
+            </p>
           </div>
         </form>
       </div>
@@ -128,26 +133,16 @@ export default function LoginPage() {
         maxWidth="max-w-xs"
       >
         <div className="flex flex-col items-center gap-3">
-          {/* 桌面端：二维码指向 APK，用手机扫码装客户端 */}
+          {/* 桌面端入口，扫码指向 APK，用手机扫码装客户端 */}
           {/* 二维码为构建期生成的静态资源 */}
           <img
             src={`${BASE_PATH}/download/qr-apk.svg`}
             alt="扫码下载 LinguaScene Android 安装包"
-            className="hidden h-44 w-44 rounded-xl border border-slate-200 bg-white p-2 md:block"
+            className="h-44 w-44 rounded-xl border border-slate-200 bg-white p-2"
           />
-          <p className="hidden text-center text-xs leading-relaxed text-slate-500 md:block">
+          <p className="text-center text-xs leading-relaxed text-slate-500">
             用手机扫码下载安装包。若系统提示「未知来源」，请允许本次安装。
           </p>
-
-          {/* 手机端：扫不了自己的屏幕，直接给网址 */}
-          <div className="w-full space-y-2 md:hidden">
-            <p className="text-center text-xs text-slate-500">
-              网页版地址，用手机浏览器直接打开
-            </p>
-            <p className="break-all rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center font-mono text-xs text-slate-700">
-              {siteUrl || "…"}
-            </p>
-          </div>
 
           <a href={APK_PATH} download className="btn-primary w-full">
             直接下载安装包
