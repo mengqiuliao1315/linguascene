@@ -450,13 +450,8 @@ function AiSettingsView() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">模型设置</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            添加自己的模型供应商，可加多个、每个下面可放多个模型；也可以采纳别人分享的模型。
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold text-slate-900">模型设置</h1>
         <button
           type="button"
           onClick={() => setCatalogOpen(true)}
@@ -464,6 +459,9 @@ function AiSettingsView() {
         >
           + 添加供应商
         </button>
+        <p className="basis-full text-xs text-slate-500">
+          添加自己的模型供应商，可加多个、每个下面可放多个模型；也可以采纳别人分享的模型。
+        </p>
       </div>
 
       {error ? (
@@ -478,12 +476,12 @@ function AiSettingsView() {
         <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-700">{notice}</p>
       ) : null}
 
-      <section className="card flex items-center gap-3 p-4">
-        <span className="text-xs text-slate-500">当前生效</span>
-        <span className="chip-brand">
+      <section className="card flex flex-wrap items-center gap-2 p-3 sm:gap-3 sm:p-4">
+        <span className="shrink-0 text-xs text-slate-500">当前生效</span>
+        <span className="chip-brand shrink-0">
           {SOURCE_TEXT[status.active_source] ?? status.active_source}
         </span>
-        <span className="text-sm text-slate-700">{status.active_label}</span>
+        <span className="min-w-0 truncate text-sm text-slate-700">{status.active_label}</span>
       </section>
 
       <div className="card grid gap-0 overflow-hidden md:grid-cols-[260px_1fr]">
@@ -638,7 +636,7 @@ function AiSettingsView() {
           )}
         </aside>
 
-        <div className="p-5">
+        <div className="p-3 sm:p-5">
           {pane === "new" || editing ? (
             <form onSubmit={handleSave} className="space-y-4" autoComplete="off">
               <div className="flex items-start justify-between gap-4">
@@ -902,7 +900,7 @@ function AiSettingsView() {
                 Key 加密保存在服务端，不会回传到浏览器，也不会展示给管理员。
               </p>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button
                   type="submit"
                   disabled={saving || !canSave}
