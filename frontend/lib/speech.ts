@@ -46,11 +46,16 @@ export function currentSpeechVolume(): number {
 
 export function stopSpeaking(): void {
   speakToken += 1;
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
-  }
+  const audio = currentAudio;
+  currentAudio = null;
   currentAudioKey = null;
+  if (audio) {
+    try {
+      audio.pause();
+    } catch {
+
+    }
+  }
   if (canSpeak()) window.speechSynthesis.cancel();
 }
 
@@ -336,51 +341,56 @@ function playUrl(
 
   return new Promise<void>((resolve, reject) => {
     let settled = false;
-
     let playing = false;
-    const release = () => {
+
+    // 仅在音频真正结束/出错时才释放引用：即使调用方不等待播放结束
+    // （waitUntilEnd=false，例如手动点小喇叭），也要一直把 currentAudio
+    // 留在全局变量里，这样新的语音开始时会先停掉它，避免两条语音重叠。
+    const clearIfCurrent = () => {
       if (currentAudio === audio) {
         currentAudio = null;
         currentAudioKey = null;
       }
     };
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearIfCurrent();
+      if (playing) audio.pause();
+      reject(err);
+    };
+
     const timer = setTimeout(() => {
 
       fail(new Error(playing ? PLAY_CUT : "audio unavailable"));
     }, waitUntilEnd ? playbackTimeoutMs(text) : START_TIMEOUT_MS);
 
-    const fail = (err: unknown) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      release();
-      if (playing) audio.pause();
-      reject(err);
-    };
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      release();
-      resolve();
-    };
-
     audio.onerror = () => fail(new Error(playing ? PLAY_CUT : "audio unavailable"));
 
     audio.onpause = () => {
-      if (!playing || audio.ended) return;
+      if (settled || !playing || audio.ended) return;
       fail(new Error(PLAY_CUT));
     };
 
     audio.onended = () => {
-      release();
-      done();
+      clearIfCurrent();
+      settle();
     };
+
     audio
       .play()
       .then(() => {
         playing = true;
-        if (!waitUntilEnd) done();
+        // 不等待播放结束时立即 resolve 让调用方继续，但仍保留 currentAudio 引用，
+        // 直到音频真正结束或被打断。
+        if (!waitUntilEnd) settle();
       })
       .catch(() => fail(new Error(playing ? PLAY_CUT : "audio unavailable")));
   });
@@ -394,14 +404,16 @@ export async function speak(
   const content = text.trim();
   if (!content) return false;
   const waitUntilEnd = options.waitUntilEnd ?? false;
+  // 开始新的朗读前，先彻底停掉上一条语音（音频或浏览器朗读），
+  // 保证「一次只放一条语音」：新语音直接打断旧语音。
   stopSpeaking();
+  const token = ++speakToken;
 
   const started = performance.now();
   const marks: string[] = [];
   const label = content.slice(0, 32);
 
   if (typeof window !== "undefined" && typeof Audio !== "undefined") {
-    const token = ++speakToken;
     const candidates = [
       ...(options.url ? [options.url] : []),
       ttsUrl(content, lang),
@@ -477,6 +489,11 @@ export async function speak(
         }
       }
     }
+  }
+  // 若在合成过程中已被新的朗读抢占，则不再落到浏览器朗读，避免两条语音同时响。
+  if (token !== speakToken) {
+    traceSpeak({ text: label, stopped: true, marks });
+    return false;
   }
   await speakWithBrowser(content, lang, waitUntilEnd);
   traceSpeak({
