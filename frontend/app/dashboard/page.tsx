@@ -84,7 +84,7 @@ function DashboardContent() {
 
       {heat ? (
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="card space-y-4 p-5">
+          <div className="card min-w-0 space-y-4 p-5">
             <SectionHeader
               title="学习记录"
               action={

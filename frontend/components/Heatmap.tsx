@@ -11,9 +11,9 @@ const MONTHS = [
   "7月", "8月", "9月", "10月", "11月", "12月",
 ];
 
-const CELL = 16;
 const GAP = 3;
-const STEP = CELL + GAP;
+/* 月份标签行的高度：星期列和热力列必须用同一个值，否则整列对不齐 */
+const MONTH_ROW = 14;
 
 function formatDate(date: Date): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
@@ -95,28 +95,29 @@ export function Heatmap({
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto pb-1">
+      {/* 桌面端卡住最大宽度，格子大小跟原来一致；窄屏就按可用宽度均分，
+          18 周全部塞得下，不用左右拖动。 */}
+      <div className="max-w-[360px]">
         <div className="flex gap-2">
           <div className="flex shrink-0 flex-col" style={{ gap: GAP }}>
-            <div style={{ height: CELL }} />
+            <div style={{ height: MONTH_ROW }} />
             {WEEKDAYS.map((day, index) => (
               <span
                 key={index}
-                className="flex items-center justify-end text-[10px] leading-none text-slate-300"
-                style={{ height: CELL }}
+                className="flex flex-1 items-center justify-end text-[10px] leading-none text-slate-300"
               >
                 {day}
               </span>
             ))}
           </div>
 
-          <div className="flex min-w-0 flex-col" style={{ gap: GAP }}>
-            <div className="relative" style={{ height: CELL }}>
+          <div className="flex min-w-0 flex-1 flex-col" style={{ gap: GAP }}>
+            <div className="relative" style={{ height: MONTH_ROW }}>
               {monthLabels.map((item) => (
                 <span
                   key={item.index}
                   className="absolute top-0 whitespace-nowrap text-[10px] font-medium leading-none text-slate-400"
-                  style={{ left: item.index * STEP }}
+                  style={{ left: `${(item.index / weeks) * 100}%` }}
                 >
                   {item.label}
                 </span>
@@ -127,7 +128,7 @@ export function Heatmap({
               {columns.map((column, colIndex) => (
                 <div
                   key={colIndex}
-                  className="flex shrink-0 flex-col"
+                  className="flex min-w-0 flex-1 flex-col"
                   style={{ gap: GAP }}
                 >
                   {column.map(({ date, key, cell }) => {
@@ -137,7 +138,6 @@ export function Heatmap({
                     return (
                       <span
                         key={key}
-                        style={{ width: CELL, height: CELL }}
                         onMouseEnter={
                           future
                             ? undefined
@@ -153,7 +153,7 @@ export function Heatmap({
                               }
                         }
                         onMouseLeave={future ? undefined : () => setTip(null)}
-                        className={`rounded-[4px] transition ${
+                        className={`aspect-square w-full rounded-[3px] transition ${
                           level < 0
                             ? "bg-transparent"
                             : HEAT_COLORS[Math.min(level, HEAT_COLORS.length - 1)]
@@ -173,11 +173,12 @@ export function Heatmap({
       </div>
 
       {stats.length > 0 ? (
-        <div className="flex flex-wrap gap-3">
+        /* 三张统计卡等宽平分，不用 flex-1 + min-w 撑最小宽度，避免再顶宽卡片 */
+        <div className="grid max-w-[360px] grid-cols-3 gap-2.5">
           {stats.map((item) => (
             <div
               key={item.label}
-              className="flex min-w-[104px] flex-1 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5"
+              className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5"
             >
               <span className="text-lg leading-none">{item.icon}</span>
               <div className="leading-tight">
@@ -201,11 +202,7 @@ export function Heatmap({
         <span className="flex items-center gap-1">
           少
           {HEAT_COLORS.map((color) => (
-            <span
-              key={color}
-              className={`rounded-[4px] ${color}`}
-              style={{ width: CELL, height: CELL }}
-            />
+            <span key={color} className={`h-3 w-3 rounded-[3px] ${color}`} />
           ))}
           多
         </span>
