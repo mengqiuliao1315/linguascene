@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 
+import { assetUrl } from "@/lib/api";
+
 export function Modal({
   open,
   onClose,
@@ -159,7 +161,7 @@ export function Avatar({
     return (
 
       <img
-        src={avatar}
+        src={assetUrl(avatar)}
         alt={username}
         className={`${className} ${rounded} object-cover`}
       />

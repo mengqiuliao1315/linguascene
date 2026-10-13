@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Markdown } from "@/components/Markdown";
 import { Avatar, EmptyState, Spinner } from "@/components/ui";
+import { assetUrl } from "@/lib/api";
 import { RequireAuth } from "@/lib/auth";
 import {
   socialApi,
@@ -119,7 +120,7 @@ function Forum() {
     try {
       const { url } = await socialApi.uploadImage(file);
       const alt = file.name.replace(/\.[^.]+$/, "") || "图片";
-      insertAtCursor(`\n![${alt}](${url})\n`);
+      insertAtCursor(`\n![${alt}](${assetUrl(url)})\n`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "图片上传失败");
     } finally {

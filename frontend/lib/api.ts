@@ -33,6 +33,16 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
+/** 后端存的是站点根路径（如 /api/users/avatar/x.jpg），站点部署在子路径下时
+    必须补上 BASE_PATH，否则 <img> 会请求到 nginx 根路径而 404（头像/论坛图片都踩过）。
+    已经是绝对 URL 或 data:/blob: 的一律原样返回。 */
+export function assetUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  if (/^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(path)) return path;
+  if (path.startsWith("data:") || path.startsWith("blob:")) return path;
+  return `${BASE_PATH}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
 const TOKEN_KEY = "linguascene_token";
 
 export type VoiceEngine = "model" | "local";
