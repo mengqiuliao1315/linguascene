@@ -214,7 +214,8 @@ def align_vocab_word(
         if token.lower() == lowered:
             return token, hint_lemma(token, known)
     for token in tokens:
-        if lemma_for(token, known) == lowered:
+        # 模型给的原形不一定在词表里，所以除了按词表还原，也按纯规则还原试一次。
+        if lowered in (lemma_for(token, known), lemmatize(token)):
             return token, lowered
     return candidate, hint_lemma(candidate, known)
 
