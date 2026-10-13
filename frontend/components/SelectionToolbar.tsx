@@ -56,9 +56,13 @@ export function SelectionToolbar({
   const above = selection.y > 140;
   const viewportWidth =
     typeof window === "undefined" ? 1024 : window.innerWidth;
+  // 浮层以选中位置为中心，留边要按自身半宽算，否则贴到屏幕两侧会被切掉。
+  // 菜单模式是一排小按钮（约 260px 宽），写笔记模式是最多 18rem 的输入区。
+  const halfWidth =
+    mode === "note" ? Math.min(144, (viewportWidth - 24) / 2) : 130;
   const left = Math.min(
-    Math.max(selection.x, 130),
-    Math.max(viewportWidth - 130, 130)
+    Math.max(selection.x, halfWidth),
+    Math.max(viewportWidth - halfWidth, halfWidth)
   );
 
   return (
@@ -79,7 +83,7 @@ export function SelectionToolbar({
               type="button"
               title={`标为${COLOR_LABELS[item]}`}
               onClick={() => onPickColor(item)}
-              className={`h-6 w-6 rounded-full ring-1 ring-slate-200 transition hover:scale-110 ${COLOR_DOTS[item]}`}
+              className={`relative h-6 w-6 rounded-full ring-1 ring-slate-200 transition hover:scale-110 after:absolute after:-inset-2 after:rounded-full after:content-[''] ${COLOR_DOTS[item]}`}
             />
           ))}
           <span className="mx-1 h-5 w-px bg-slate-200" />

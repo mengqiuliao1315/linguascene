@@ -109,10 +109,15 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 小屏下输入框字号 ≥16px，避免移动端聚焦时页面被强制缩放 */
+/* 小屏下输入框字号 ≥16px，避免移动端聚焦时被强制缩放。
+   .input 只覆盖了一部分输入框，裸元素得一起兜住；这条必须压过 text-xs 之类的工具类，
+   所以用 !important（整站没有比 16px 更大的输入框，不存在反向缩小的风险）。 */
 @media (max-width: 640px) {
-  .input {
-    font-size: 16px;
+  .input,
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
   }
 }
 

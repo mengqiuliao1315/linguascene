@@ -214,7 +214,11 @@ export function Heatmap({
       {tip ? (
         <div
           className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full"
-          style={{ left: tip.x, top: tip.y - 8 }}
+          style={{
+            // 气泡跟着格子走，靠近屏幕左右边缘时要夹回可视区，否则会被裁掉
+            left: `clamp(5rem, ${tip.x}px, calc(100vw - 5rem))`,
+            top: tip.y - 8,
+          }}
         >
           <div className="heat-tip relative">
             <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200/70 bg-white/95 py-[3px] pl-[3px] pr-2.5 shadow-[0_8px_22px_-10px_rgba(37,99,235,0.5)]">
