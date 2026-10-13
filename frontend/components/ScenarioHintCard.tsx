@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ScenarioHint } from "@/lib/types";
 
@@ -13,6 +13,12 @@ export function ScenarioHintCard({
 }) {
   const [open, setOpen] = useState(true);
   const [showEnglish, setShowEnglish] = useState(false);
+
+  // 每出现一条新的提示（即新的一轮对话）都重新隐藏英文参考：
+  // 上次查看过不代表这次也要看，必须重新点小眼睛才显示。
+  useEffect(() => {
+    setShowEnglish(false);
+  }, [hint]);
 
   if (!hint) return null;
 
