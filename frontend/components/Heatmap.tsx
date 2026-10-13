@@ -46,6 +46,8 @@ export function Heatmap({
     label: string;
     x: number;
     y: number;
+    /* 格子偏屏幕右半边时，气泡朝左展开，否则会顶出屏幕被裁掉 */
+    flip: boolean;
   } | null>(null);
 
   const today = new Date();
@@ -144,11 +146,13 @@ export function Heatmap({
                             : (event) => {
                                 const rect =
                                   event.currentTarget.getBoundingClientRect();
+                                const center = rect.left + rect.width / 2;
                                 setTip({
                                   weekday: WEEKDAY_FULL[date.getDay()],
                                   label: formatDate(date),
-                                  x: rect.left + rect.width / 2,
+                                  x: center,
                                   y: rect.top,
+                                  flip: center > window.innerWidth / 2,
                                 });
                               }
                         }
@@ -209,13 +213,14 @@ export function Heatmap({
       </div>
 
       {tip ? (
+        /* 气泡贴着被点的格子展开：靠右就朝左伸、靠左就朝右伸，
+           箭头永远压在那一格的正上方；不要用 clamp 把气泡夹回屏幕中间，
+           否则箭头会指到别的格子上（手机上最右两列特别明显）。 */
         <div
-          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full"
-          style={{
-            // 气泡跟着格子走，靠近屏幕左右边缘时要夹回可视区，否则会被裁掉
-            left: `clamp(5rem, ${tip.x}px, calc(100vw - 5rem))`,
-            top: tip.y - 8,
-          }}
+          className={`pointer-events-none fixed z-50 -translate-y-full ${
+            tip.flip ? "-translate-x-full" : ""
+          }`}
+          style={{ left: tip.x, top: tip.y - 8 }}
         >
           <div className="heat-tip relative">
             <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200/70 bg-white/95 py-[3px] pl-[3px] pr-2.5 shadow-[0_8px_22px_-10px_rgba(37,99,235,0.5)]">
@@ -226,7 +231,11 @@ export function Heatmap({
                 {tip.label}
               </span>
             </div>
-            <span className="absolute left-1/2 top-full -ml-1 h-0 w-0 border-4 border-transparent border-t-white" />
+            <span
+              className={`absolute top-full h-0 w-0 border-4 border-transparent border-t-white ${
+                tip.flip ? "-mr-1 right-0" : "-ml-1 left-0"
+              }`}
+            />
           </div>
         </div>
       ) : null}
