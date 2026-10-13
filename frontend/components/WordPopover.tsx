@@ -58,6 +58,7 @@ export function WordPopover({
   const [noting, setNoting] = useState(false);
   const [slowPending, setSlowPending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const lookupRef = useRef<Promise<WordExplanation | null> | null>(null);
   const spokenFor = useRef("");
@@ -76,6 +77,7 @@ export function WordPopover({
     setPreview(null);
     setSaved(false);
     setFailed(false);
+    setSaveError("");
 
     void api
       .translate(word, context, true)
@@ -126,16 +128,22 @@ export function WordPopover({
 
   async function handleSave() {
     if (!shown) return;
-    await api.saveWord({
-      word: shown.word,
-      meaning:
-        shown.core_meanings[0] ?? senses[0]?.meaning ?? shown.meaning_in_context,
-      phonetic: shown.pronunciation,
-      example: shown.example_sentences[0] ?? context,
-      level: shown.cefr_level,
-      source: "reading",
-    });
-    setSaved(true);
+    setSaveError("");
+    try {
+      await api.saveWord({
+        word: shown.word,
+        meaning:
+          shown.core_meanings[0] ?? senses[0]?.meaning ?? shown.meaning_in_context,
+        phonetic: shown.pronunciation,
+        example: shown.example_sentences[0] ?? context,
+        level: shown.cefr_level,
+        source: "reading",
+      });
+      setSaved(true);
+    } catch (err) {
+      // 不捕获的话这里会变成未处理的 Promise 拒绝，用户点「加入词库」毫无反馈。
+      setSaveError(err instanceof Error ? err.message : "加入词库失败");
+    }
   }
 
   async function handleAnnotate() {
@@ -155,12 +163,21 @@ export function WordPopover({
     }
   }
 
+  // 只 clamp top 还不够：释义很长时浮层仍会伸出屏幕底部，而整体溢出的 fixed 元素
+  // 内部滚动条也够不到被切掉的部分。这里按「视口底部剩余空间」再封一次高度。
+  const top = Math.max(12, Math.min(position.y + 12, window.innerHeight - 280));
+  const maxHeight = Math.max(
+    160,
+    Math.min(window.innerHeight * 0.7, window.innerHeight - top - 12)
+  );
+
   return (
     <div
       className="fixed z-40 max-h-[70vh] w-[min(18rem,calc(100vw_-_1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
       style={{
         left: Math.max(12, Math.min(position.x, window.innerWidth - 300)),
-        top: Math.max(12, Math.min(position.y + 12, window.innerHeight - 280)),
+        top,
+        maxHeight,
       }}
     >
       <div className="flex items-start justify-between">
@@ -259,6 +276,12 @@ export function WordPopover({
           ) : null}
         </div>
       )}
+
+      {saveError ? (
+        <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">
+          {saveError}
+        </p>
+      ) : null}
 
       <div className="mt-3 flex items-center gap-2">
         <button

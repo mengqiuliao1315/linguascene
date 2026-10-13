@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { WordPopover } from "@/components/WordPopover";
-import { EmptyState, Spinner } from "@/components/ui";
+import { EmptyState, ErrorText, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { RequireAuth } from "@/lib/auth";
 import type {
@@ -108,6 +108,9 @@ function ArticleReader() {
         >
           {analyzing ? "分析中…" : "AI Analysis"}
         </button>
+
+        {/* 文章已加载时 error 只可能是分析失败，必须就地提示，否则点了按钮像没反应 */}
+        <ErrorText>{error}</ErrorText>
 
         {analysis ? (
           <>

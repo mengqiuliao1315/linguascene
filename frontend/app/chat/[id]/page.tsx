@@ -197,6 +197,13 @@ function SentenceCard({
   position: { x: number; y: number } | null;
   onClose: () => void;
 }) {
+  // 同 WordPopover：除 top 之外还要按底部剩余空间封顶，避免长句析内容伸出屏幕。
+  const top = Math.max(12, Math.min((position?.y ?? 12) + 12, window.innerHeight - 320));
+  const maxHeight = Math.max(
+    160,
+    Math.min(window.innerHeight * 0.7, window.innerHeight - top - 12)
+  );
+
   return (
     <div
       className="fixed z-40 w-[min(20rem,calc(100vw_-_1.5rem))] max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
@@ -205,10 +212,8 @@ function SentenceCard({
           12,
           Math.min(position?.x ?? 12, window.innerWidth - 340)
         ),
-        top: Math.max(
-          12,
-          Math.min((position?.y ?? 12) + 12, window.innerHeight - 320)
-        ),
+        top,
+        maxHeight,
       }}
     >
       <div className="flex items-start justify-between gap-2">
@@ -660,7 +665,7 @@ function ChatRoom() {
   const scenario = conversation.scenario;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-3xl flex-col">
+    <div className="mx-auto flex h-[calc(100dvh_-_9.5rem_-_env(safe-area-inset-bottom))] max-w-3xl flex-col md:h-[calc(100vh-8rem)]">
       <header className="card flex items-center gap-4 rounded-b-none border-b-0 p-4">
         <span className="text-2xl">{scenario?.icon ?? "💬"}</span>
         <div className="flex-1">

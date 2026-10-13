@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { EmptyState, Spinner } from "@/components/ui";
+import { EmptyState, ErrorText, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { RequireAuth } from "@/lib/auth";
 import type { ArticleAnalysis, UserContent } from "@/lib/types";
@@ -65,6 +65,9 @@ function ContentDetail() {
         >
           {generating ? "生成中…" : "生成学习材料"}
         </button>
+
+        {/* 内容已加载时 error 只可能是生成失败，就地提示 */}
+        <ErrorText>{error}</ErrorText>
 
         {analysis ? (
           <>

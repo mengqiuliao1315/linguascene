@@ -27,6 +27,7 @@ function ArticleList() {
 
   useEffect(() => {
     setLoading(true);
+    setError("");
     api
       .articles(category === "全部" ? undefined : { category })
       .then(setArticles)

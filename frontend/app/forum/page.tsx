@@ -494,7 +494,7 @@ function Forum() {
         onClick={() => setComposing((v) => !v)}
         aria-label={composing ? "取消发布" : "发布帖子"}
         title={composing ? "取消发布" : "发布帖子"}
-        className="fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-3xl leading-none text-white shadow-lg shadow-brand-600/30 transition hover:bg-brand-700 active:scale-95"
+        className="fixed bottom-[calc(5rem_+_env(safe-area-inset-bottom))] right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-3xl leading-none text-white shadow-lg shadow-brand-600/30 transition hover:bg-brand-700 active:scale-95 md:bottom-6"
       >
         <span className={composing ? "rotate-45 transition-transform" : "transition-transform"}>
           +

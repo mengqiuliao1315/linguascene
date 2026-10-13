@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
-import { EmptyState, Modal, Spinner } from "@/components/ui";
+import { EmptyState, ErrorText, Modal, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { RequireAuth } from "@/lib/auth";
 import { staticOpeningUrl } from "@/lib/openingAudio";
@@ -19,13 +19,17 @@ function ScenarioDetail() {
   const [existing, setExisting] = useState<ConversationSummary | null>(null);
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [starting, setStarting] = useState(false);
+  // 加载失败才允许整页替换；「开始对话」失败的提示要留在页内，不能把已加载的场景详情盖掉。
+  const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     api
       .scenario(Number(params.id))
       .then(setScenario)
-      .catch((err) => setError(err instanceof Error ? err.message : "加载失败"));
+      .catch((err) =>
+        setLoadError(err instanceof Error ? err.message : "加载失败")
+      );
   }, [params.id]);
 
   useEffect(() => {
@@ -72,7 +76,7 @@ function ScenarioDetail() {
     }
   }
 
-  if (error) return <EmptyState text={error} />;
+  if (loadError) return <EmptyState text={loadError} />;
   if (!scenario) return <Spinner />;
 
   return (
@@ -125,6 +129,8 @@ function ScenarioDetail() {
             </div>
           </div>
         ) : null}
+
+        <ErrorText>{error}</ErrorText>
 
         <button
           onClick={handleStart}

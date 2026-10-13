@@ -28,6 +28,7 @@ function StudyScreen() {
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [editingGoals, setEditingGoals] = useState(false);
+  const [savingGoals, setSavingGoals] = useState(false);
   const [draft, setDraft] = useState(30);
 
   const refresh = useCallback(async (nextBook: string) => {
@@ -118,9 +119,17 @@ function StudyScreen() {
   };
 
   const saveGoals = async () => {
-    await wordbookApi.saveDailyTask({ target_words: Math.max(1, draft) });
-    setEditingGoals(false);
-    await refresh(book);
+    setSavingGoals(true);
+    setError("");
+    try {
+      await wordbookApi.saveDailyTask({ target_words: Math.max(1, draft) });
+      setEditingGoals(false);
+      await refresh(book);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setSavingGoals(false);
+    }
   };
 
   return (
@@ -190,8 +199,12 @@ function StudyScreen() {
               </span>
             </label>
             <div className="flex gap-2 pt-1">
-              <button onClick={saveGoals} className="btn-primary px-3 py-1.5 text-xs">
-                保存
+              <button
+                onClick={saveGoals}
+                disabled={savingGoals}
+                className="btn-primary px-3 py-1.5 text-xs"
+              >
+                {savingGoals ? "保存中…" : "保存"}
               </button>
               <button
                 onClick={() => setEditingGoals(false)}

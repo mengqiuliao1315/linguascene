@@ -36,6 +36,7 @@ function Library() {
 
   const load = useCallback(async (source: string) => {
     setLoading(true);
+    setError("");
     try {
       setItems(await readingApi.materials(source));
     } catch (err) {

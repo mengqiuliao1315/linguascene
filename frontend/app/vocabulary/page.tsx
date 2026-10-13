@@ -288,6 +288,8 @@ function VocabularyBook() {
   const [session, setSession] = useState<QuizSession | null>(null);
   const [running, setRunning] = useState(false);
   const [quizError, setQuizError] = useState("");
+  // 单词列表相关的操作（删除、重置测验）报错走这里，避免复用 error 把整张列表换成空态。
+  const [actionError, setActionError] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -315,8 +317,13 @@ function VocabularyBook() {
 
   async function handleDelete(id: number) {
     setPendingDelete(null);
-    await wordbookApi.remove(id);
-    load();
+    setActionError("");
+    try {
+      await wordbookApi.remove(id);
+      load();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "删除失败");
+    }
   }
 
   async function startQuiz(count: number) {
@@ -342,7 +349,13 @@ function VocabularyBook() {
   }
 
   async function discardQuiz() {
-    await wordbookApi.quizReset();
+    setActionError("");
+    try {
+      await wordbookApi.quizReset();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "重置失败");
+      return;
+    }
     setSession(null);
   }
 
@@ -404,6 +417,9 @@ function VocabularyBook() {
       ) : null}
 
       {quizError ? <p className="text-xs text-rose-500">{quizError}</p> : null}
+      {actionError ? (
+        <p className="text-xs text-rose-500">{actionError}</p>
+      ) : null}
 
       {loading ? (
         <Spinner />
