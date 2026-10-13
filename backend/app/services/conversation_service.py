@@ -148,6 +148,20 @@ def _suggested_expressions(messages: list[Message]) -> set[str]:
     return suggested
 
 
+def last_hint(conversation: Conversation) -> dict | None:
+    """取最近一轮 AI 生成的提示。刷新后据此展示 AI 分析，而不是内置规则文案。"""
+    for message in reversed(conversation.messages):
+        if not message.feedback_json:
+            continue
+        try:
+            feedback = json.loads(message.feedback_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        hint = feedback.get("hint")
+        return hint if isinstance(hint, dict) else None
+    return None
+
+
 @dataclass
 class TurnContext:
 
@@ -242,6 +256,7 @@ def persist_feedback(
             "natural_expression": natural,
             "new_vocabulary": vocabulary,
             "coach_note": coach,
+            "hint": feedback.get("hint"),
         },
         ensure_ascii=False,
     )

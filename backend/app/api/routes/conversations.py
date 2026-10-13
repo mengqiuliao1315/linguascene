@@ -42,7 +42,8 @@ def _conversation_payload(conversation) -> dict:
         "started_at": conversation.started_at,
         "finished_at": conversation.finished_at,
         "scenario": scenario_payload(scenario) if scenario else None,
-        "hint": conversation_service.pending_hint(
+        "hint": conversation_service.last_hint(conversation)
+        or conversation_service.pending_hint(
             scenario, conversation_service.completed_task_keys(conversation)
         ),
     }
