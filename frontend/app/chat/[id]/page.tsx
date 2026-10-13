@@ -532,7 +532,6 @@ function ChatRoom() {
               ...prev,
               task_progress: payload.task_progress,
               is_completed: payload.task_completed,
-              hint: payload.hint,
               messages: [
                 ...prev.messages.filter(
                   (m) => m.id !== optimistic.id && m.id !== streamingId

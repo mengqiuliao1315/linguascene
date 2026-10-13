@@ -86,8 +86,6 @@ function speakWithBrowser(
     return Promise.resolve(false);
   }
 
-  if (!voice) return Promise.resolve(false);
-
   return new Promise<boolean>((resolve) => {
     let settled = false;
     const finish = () => {

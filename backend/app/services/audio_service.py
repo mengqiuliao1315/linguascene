@@ -10,6 +10,7 @@ import threading
 import time
 from concurrent.futures import TimeoutError as FutureTimeout
 from pathlib import Path
+from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
 from app.core.config import settings
@@ -28,9 +29,25 @@ try:
         split_text_by_byte_length,
         ssml_headers_plus_data,
     )
-    from edge_tts.constants import SEC_MS_GEC_VERSION, WSS_HEADERS, WSS_URL
+    from edge_tts.constants import (
+        SEC_MS_GEC_VERSION,
+        TRUSTED_CLIENT_TOKEN,
+        WSS_HEADERS,
+        WSS_URL,
+    )
     from edge_tts.data_classes import TTSConfig
     from edge_tts.drm import DRM
+
+    # 微软 2026 年起对旧端点（speech.platform.bing.com）的合成握手普遍返回 403
+    # （edge-tts issue #490），新端点 api.msedgeservices.com 提供同一批声音，
+    # 只是把令牌参数从 TrustedClientToken 换成了 Ocp-Apim-Subscription-Key。
+    # 优先新端点，旧端点留作回退，以防微软日后恢复。
+    ALT_WSS_URL = (
+        "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+        f"?Ocp-Apim-Subscription-Key={TRUSTED_CLIENT_TOKEN}"
+    )
+    WSS_ENDPOINTS = (ALT_WSS_URL, WSS_URL)
+    TTS_HOSTS = ("api.msedgeservices.com", "speech.platform.bing.com")
 
     _IMPORT_ERROR: str | None = None
 except ImportError as exc:  # pragma: no cover - 取决于部署环境
@@ -50,10 +67,11 @@ TURN_TIMEOUT = 30
 IDLE_TTL = 22.0
 WARM_CONNECTIONS = 6
 
-TTS_HOST = "speech.platform.bing.com"
 _NO_PROXY_VARS = ("no_proxy", "NO_PROXY")
 
 _direct_route = True
+
+_endpoint_index = 0
 
 _SSL_CTX: ssl.SSLContext | None = None
 
@@ -72,9 +90,9 @@ def _safe(word: str) -> str:
 def _set_direct_route(enabled: bool) -> None:
     current = os.environ.get("no_proxy") or os.environ.get("NO_PROXY") or ""
     hosts = [item.strip() for item in current.split(",") if item.strip()]
-    hosts = [host for host in hosts if host != TTS_HOST]
+    hosts = [host for host in hosts if host not in TTS_HOSTS]
     if enabled:
-        hosts.append(TTS_HOST)
+        hosts.extend(TTS_HOSTS)
 
     value = ",".join(hosts)
     for key in _NO_PROXY_VARS:
@@ -115,32 +133,48 @@ class _TtsConnection:
         return (time.monotonic() - self._last_used) < IDLE_TTL
 
     async def connect(self) -> None:
-        global _direct_route
+        global _direct_route, _endpoint_index
         _set_direct_route(_direct_route)
 
         timeout = aiohttp.ClientTimeout(
             total=None, sock_connect=CONNECT_TIMEOUT, sock_read=SOCK_READ_TIMEOUT
         )
         session = aiohttp.ClientSession(timeout=timeout)
-        try:
-            ws = await session.ws_connect(
-                f"{WSS_URL}&ConnectionId={connect_id()}"
-                f"&Sec-MS-GEC={DRM.generate_sec_ms_gec()}"
-                f"&Sec-MS-GEC-Version={SEC_MS_GEC_VERSION}",
-                compress=15,
-                headers=DRM.headers_with_muid(WSS_HEADERS),
-                ssl=_ssl_context(),
-            )
-            await ws.send_str(_command_frame())
-        except Exception as exc:
-            await session.close()
-            if _direct_route:
-                _direct_route = False
-                logger.warning("edge-tts 直连失败，改用系统代理: %s", exc)
-            raise
-        self._session = session
-        self._ws = ws
-        self._last_used = time.monotonic()
+
+        order = list(range(len(WSS_ENDPOINTS)))
+        if _endpoint_index:
+            order = order[_endpoint_index:] + order[:_endpoint_index]
+
+        last: Exception | None = None
+        for index in order:
+            try:
+                ws = await session.ws_connect(
+                    f"{WSS_ENDPOINTS[index]}&ConnectionId={connect_id()}"
+                    f"&Sec-MS-GEC={DRM.generate_sec_ms_gec()}"
+                    f"&Sec-MS-GEC-Version={SEC_MS_GEC_VERSION}",
+                    compress=15,
+                    headers=DRM.headers_with_muid(WSS_HEADERS),
+                    ssl=_ssl_context(),
+                )
+                await ws.send_str(_command_frame())
+            except Exception as exc:  # noqa: BLE001 - 换下一个端点再试
+                last = exc
+                continue
+
+            if index != _endpoint_index:
+                host = urlsplit(WSS_ENDPOINTS[index]).hostname
+                logger.info("edge-tts 合成端点切换到 %s", host)
+            _endpoint_index = index
+            self._session = session
+            self._ws = ws
+            self._last_used = time.monotonic()
+            return
+
+        await session.close()
+        if _direct_route:
+            _direct_route = False
+            logger.warning("edge-tts 直连失败，改用系统代理: %s", last)
+        raise last if last is not None else ConnectionError("无法连接语音服务")
 
     async def synthesize(self, text: str, voice: str) -> bytes:
         ws = self._ws

@@ -966,13 +966,6 @@ function Workspace() {
             >
               {analyzing ? "重新分析中…" : "重新分析"}
             </button>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="btn-primary !py-2 text-sm"
-            >
-              {exporting ? "导出中…" : "导出 PDF"}
-            </button>
             {ttsSupported ? (
               <button
                 onClick={() => setMuted(!muted)}
@@ -985,6 +978,14 @@ function Workspace() {
             ) : null}
           </>
         )}
+
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="btn-primary !py-2 text-sm"
+        >
+          {exporting ? "导出中…" : "导出 PDF"}
+        </button>
 
         {canManage ? (
           <button onClick={handlePublish} className="btn-ghost !py-2 text-sm">
