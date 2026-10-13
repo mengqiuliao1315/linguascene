@@ -226,7 +226,7 @@ function FriendsView() {
                         className={`flex ${message.mine ? "justify-end" : "justify-start"}`}
                       >
                         <div
-                          className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${
+                          className={`max-w-[75%] min-w-0 break-words rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
                             message.mine
                               ? "bg-brand-600 text-white"
                               : "bg-slate-100 text-slate-800"

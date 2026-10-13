@@ -665,18 +665,18 @@ function ChatRoom() {
 
   return (
     <div className="mx-auto flex h-[calc(100dvh_-_9.5rem_-_env(safe-area-inset-bottom))] max-w-3xl flex-col md:h-[calc(100vh-8rem)]">
-      <header className="card flex items-center gap-4 rounded-b-none border-b-0 p-4">
-        <span className="text-2xl">{scenario?.icon ?? "💬"}</span>
-        <div className="flex-1">
-          <p className="font-medium text-slate-900">
+      <header className="card flex flex-wrap items-center gap-3 rounded-b-none border-b-0 p-3 sm:gap-4 sm:p-4">
+        <span className="text-xl sm:text-2xl">{scenario?.icon ?? "💬"}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-slate-900">
             {scenario?.title ?? "Free Talk"}
           </p>
-          <p className="text-xs text-slate-400">
+          <p className="truncate text-xs text-slate-400">
             {scenario ? `AI: ${scenario.ai_role}` : "AI Tutor"}
           </p>
         </div>
         {ttsSupported ? (
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => setAutoSpeak(!autoSpeak)}
@@ -709,9 +709,9 @@ function ChatRoom() {
               disabled={muted}
               aria-label="朗读音量"
               title={`朗读音量 ${Math.round(volume * 100)}%`}
-              className="range-brand w-20"
+              className="range-brand w-16 sm:w-20"
             />
-            <span className="w-7 text-right text-[11px] tabular-nums text-slate-400">
+            <span className="w-8 text-right text-[11px] tabular-nums text-slate-400">
               {Math.round(volume * 100)}%
             </span>
           </div>
@@ -730,14 +730,14 @@ function ChatRoom() {
             }`}
           >
             <div
-              className={`flex max-w-[80%] flex-col ${
+              className={`flex max-w-[80%] min-w-0 flex-col ${
                 message.role === "user" ? "items-end" : "items-start"
               }`}
             >
-              <div className="flex items-start gap-1.5">
+              <div className="flex min-w-0 items-start gap-1.5">
                 <div
                   data-message-content={message.content}
-                  className={`rounded-2xl px-4 py-2.5 text-sm ${
+                  className={`min-w-0 break-words rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed sm:px-4 ${
                     message.role === "user"
                       ? "bg-brand-600 text-white"
                       : "bg-slate-100 text-slate-800"

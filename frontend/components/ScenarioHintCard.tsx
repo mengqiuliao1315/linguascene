@@ -43,7 +43,7 @@ export function ScenarioHintCard({
       </div>
 
       {open ? (
-        <div className="mt-2 space-y-2 text-xs">
+        <div className="mt-2 min-w-0 space-y-2 break-words text-xs">
           {hint.idea_zh ? (
             <p className="text-slate-600">
               <span className="text-slate-400">中文思路：</span>
@@ -59,10 +59,12 @@ export function ScenarioHintCard({
           ) : null}
 
           {hint.suggested_en ? (
-            <p className="flex items-start gap-1.5 text-slate-500">
+            <p className="flex min-w-0 items-start gap-1.5 text-slate-500">
               <span className="shrink-0 text-slate-400">英文参考：</span>
               {showEnglish ? (
-                <span className="flex-1">{hint.suggested_en}</span>
+                <span className="min-w-0 flex-1 break-words">
+                  {hint.suggested_en}
+                </span>
               ) : (
                 <span className="flex-1 select-none text-slate-300">
                   ••••••

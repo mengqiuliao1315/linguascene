@@ -915,8 +915,8 @@ function Workspace() {
 
   return (
     <div className="space-y-4">
-      <div className="card flex flex-wrap items-center gap-3 p-4">
-        <div className="min-w-[12rem] flex-1">
+      <div className="card flex flex-wrap items-center gap-3 p-3 sm:p-4">
+        <div className="min-w-0 flex-1">
           <h1 className="text-base font-semibold text-slate-900">{material.title}</h1>
           <p className="text-xs text-slate-400">
             {material.author_name} · {material.level} · {material.word_count} words
