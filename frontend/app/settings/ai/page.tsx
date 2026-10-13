@@ -484,8 +484,96 @@ function AiSettingsView() {
         <span className="min-w-0 truncate text-sm text-slate-700">{status.active_label}</span>
       </section>
 
-      <div className="card grid gap-0 overflow-hidden md:grid-cols-[260px_1fr]">
-        <aside className="border-b border-slate-200 bg-slate-50/60 p-3 md:border-b-0 md:border-r">
+      <div className="card overflow-hidden md:grid md:grid-cols-[260px_1fr]">
+        {/* 手机：把长长的接入清单收成一条可左右拖动的切换条，
+           让下面的配置详情一进页面就能看全，不用先划过一大堆列表 */}
+        <div className="border-b border-slate-200 bg-slate-50/60 p-3 md:hidden">
+          {configs.length === 0 &&
+          !status.adopted_share &&
+          myShares.length === 0 &&
+          otherShares.length === 0 ? (
+            <p className="text-xs text-slate-400">
+              还没有接入，点右上角「添加供应商」开始配置。
+            </p>
+          ) : (
+            <div className="scrollbar-none -mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+              {configs.map((config) => {
+                const key: PaneKey = `config:${config.id}`;
+                const on = pane === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => selectPane(key)}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition ${
+                      on
+                        ? "border-brand-300 bg-white font-medium text-brand-700 shadow-sm"
+                        : "border-slate-200 bg-white/70 text-slate-600"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        config.is_active
+                          ? "bg-emerald-500"
+                          : config.active_model
+                            ? "bg-amber-500"
+                            : "bg-slate-300"
+                      }`}
+                    />
+                    {config.name || config.active_model}
+                  </button>
+                );
+              })}
+              {status.adopted_share ? (
+                <button
+                  type="button"
+                  onClick={() => selectPane("adopted")}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition ${
+                    pane === "adopted"
+                      ? "border-brand-300 bg-white font-medium text-brand-700 shadow-sm"
+                      : "border-slate-200 bg-white/70 text-slate-600"
+                  }`}
+                >
+                  {status.adopted_share.title}
+                </button>
+              ) : null}
+              {myShares.map((share) => {
+                const key: PaneKey = `share:${share.id}`;
+                const on = pane === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => selectPane(key)}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition ${
+                      on
+                        ? "border-brand-300 bg-white font-medium text-brand-700 shadow-sm"
+                        : "border-slate-200 bg-white/70 text-slate-600"
+                    }`}
+                  >
+                    {share.title}
+                  </button>
+                );
+              })}
+              {otherShares.map((share) => (
+                <button
+                  key={`other:${share.id}`}
+                  type="button"
+                  onClick={() => handleAdopt(share)}
+                  className="shrink-0 rounded-full border border-dashed border-slate-300 bg-white/70 px-3 py-1.5 text-xs text-slate-600"
+                >
+                  {share.title} · 采纳
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-slate-400">
+            我的接入 {configs.length} · 我分享的 {myShares.length} · 可用的分享{" "}
+            {otherShares.length}
+          </p>
+        </div>
+
+        <aside className="hidden border-b border-slate-200 bg-slate-50/60 p-3 md:block md:border-b-0 md:border-r">
           <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             我的接入（{configs.length}）
           </p>
@@ -745,7 +833,7 @@ function AiSettingsView() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-500">
-                    模型列表（点一个设为当前使用）
+                    模型列表（{models.length}）· 点一个设为当前使用
                   </span>
                   <button
                     type="button"
@@ -795,7 +883,7 @@ function AiSettingsView() {
                     <span>还没有模型，添加至少一个后这条供应商才可用。</span>
                   </div>
                 ) : (
-                  <ul className="space-y-1.5">
+                  <ul className="max-h-[45vh] space-y-1.5 overflow-y-auto pr-0.5 md:max-h-none md:overflow-visible md:pr-0">
                     {models.map((item) => (
                       <li
                         key={item}
@@ -808,7 +896,7 @@ function AiSettingsView() {
                         <button
                           type="button"
                           onClick={() => setActiveModel(item)}
-                          className="min-w-0 flex-1 text-left font-mono text-xs text-slate-700"
+                          className="min-w-0 flex-1 break-all text-left font-mono text-xs text-slate-700"
                         >
                           {item}
                         </button>
@@ -818,7 +906,7 @@ function AiSettingsView() {
                           <button
                             type="button"
                             onClick={() => setActiveModel(item)}
-                            className="shrink-0 text-[11px] text-brand-600 underline-offset-2 hover:underline"
+                            className="shrink-0 rounded-lg px-2 py-1 text-xs text-brand-600 underline-offset-2 hover:underline md:px-0 md:py-0 md:text-[11px]"
                           >
                             用这个
                           </button>
@@ -826,7 +914,7 @@ function AiSettingsView() {
                         <button
                           type="button"
                           onClick={() => handleRemoveModel(item)}
-                          className="shrink-0 text-[11px] text-slate-400 transition hover:text-rose-500"
+                          className="shrink-0 rounded-lg px-2 py-1 text-xs text-slate-400 transition hover:text-rose-500 md:px-0 md:py-0 md:text-[11px]"
                         >
                           移除
                         </button>
@@ -878,7 +966,7 @@ function AiSettingsView() {
                           setActiveModel(item);
                           setNotice(`已选用 ${item}`);
                         }}
-                        className={`rounded-full border px-2 py-0.5 font-mono text-[11px] transition ${
+                        className={`max-w-full break-all rounded-full border px-2 py-0.5 font-mono text-[11px] transition ${
                           item === activeModel
                             ? "border-brand-300 bg-brand-50 text-brand-700"
                             : "border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700"
