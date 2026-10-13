@@ -19,6 +19,7 @@ function FriendsView() {
   const [active, setActive] = useState<number | null>(initial || null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -73,9 +74,10 @@ function FriendsView() {
   async function handleSend(event: React.FormEvent) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || !active) return;
+    if (!text || !active || sending) return;
 
     const target = active;
+    setSending(true);
     setDraft("");
     try {
       const sent = await socialApi.sendMessage(target, text);
@@ -85,6 +87,8 @@ function FriendsView() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "发送失败");
       setDraft(text);
+    } finally {
+      setSending(false);
     }
   }
 
@@ -147,7 +151,8 @@ function FriendsView() {
       ) : null}
 
       {friends.length === 0 ? (
-        <EmptyState text="还没有好友，去排行榜里找人加吧" />
+        // 加载失败时上面已经有错误条，再显示「还没有好友」会让人以为好友没了。
+        error ? null : <EmptyState text="还没有好友，去排行榜里找人加吧" />
       ) : (
         <div className="grid gap-5 lg:grid-cols-3">
           <aside className="card space-y-1 p-3 lg:col-span-1">
@@ -242,8 +247,12 @@ function FriendsView() {
                     placeholder="说点什么…"
                     className="input flex-1 !py-2 text-sm"
                   />
-                  <button type="submit" disabled={!draft.trim()} className="btn-primary !py-2 text-sm">
-                    发送
+                  <button
+                    type="submit"
+                    disabled={!draft.trim() || sending}
+                    className="btn-primary !py-2 text-sm"
+                  >
+                    {sending ? "发送中…" : "发送"}
                   </button>
                 </form>
               </>

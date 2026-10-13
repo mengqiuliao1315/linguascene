@@ -375,6 +375,8 @@ function Workspace() {
     () => () => {
       stopSpeaking();
       cancelPrefetchSpeech();
+      // 离开页面时中止逐句分析的 SSE 流，否则它还会继续读流并回调已卸载的组件。
+      streamRef.current?.abort();
     },
     []
   );

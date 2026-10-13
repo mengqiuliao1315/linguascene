@@ -290,6 +290,7 @@ function VocabularyBook() {
   const [quizError, setQuizError] = useState("");
   // 单词列表相关的操作（删除、重置测验）报错走这里，避免复用 error 把整张列表换成空态。
   const [actionError, setActionError] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -305,6 +306,22 @@ function VocabularyBook() {
   }, []);
 
   useEffect(load, [load]);
+
+  // 一次取 100 条，多出来的用「加载更多」追加。之前固定只取前 100 条，
+  // 页头却显示总数，超出的单词既看不到也删不掉。
+  async function loadMore() {
+    setLoadingMore(true);
+    setActionError("");
+    try {
+      const page = await wordbookApi.myWords(words.length, 100);
+      setWords((prev) => [...prev, ...page.items]);
+      setTotal(page.total);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "加载更多失败");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const refreshQuizState = useCallback(() => {
     wordbookApi
@@ -489,6 +506,16 @@ function VocabularyBook() {
           ))}
         </div>
       )}
+
+      {!loading && !error && words.length < total ? (
+        <button
+          onClick={loadMore}
+          disabled={loadingMore}
+          className="btn-ghost w-full"
+        >
+          {loadingMore ? "加载中…" : `加载更多（还有 ${total - words.length} 个）`}
+        </button>
+      ) : null}
     </div>
   );
 }

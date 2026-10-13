@@ -397,7 +397,11 @@ function ProfileView() {
             const date = new Date();
             const monday = new Date(date);
             monday.setDate(date.getDate() - ((date.getDay() + 6) % 7) + index);
-            const key = monday.toISOString().slice(0, 10);
+            // 必须按本地日期拼 key：toISOString 是 UTC，东八区凌晨会算成前一天，
+            // 整周高亮就会错位一格（Heatmap 也是用本地日期拼的）。
+            const key = `${monday.getFullYear()}-${String(
+              monday.getMonth() + 1
+            ).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
             const active = profile.active_days.includes(key);
             return (
               <div key={label} className="flex-1 text-center">
