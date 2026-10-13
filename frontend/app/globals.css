@@ -94,10 +94,26 @@ body {
   height: 100%;
 }
 
+html {
+  /* 移动端横竖屏切换时不放大字号 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+  /* 手机宽度窄，个别浮层/宽内容溢出时不要把整页顶宽出横向滚动条 */
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 小屏下输入框字号 ≥16px，避免移动端聚焦时页面被强制缩放 */
+@media (max-width: 640px) {
+  .input {
+    font-size: 16px;
+  }
 }
 
 ::selection {
@@ -176,6 +192,30 @@ body {
 
   .range-brand:disabled {
     @apply cursor-not-allowed opacity-40;
+  }
+}
+
+/* 安全区：配合 layout.tsx 的 viewport-fit=cover，给底部标签栏/顶栏留出刘海与
+   home 指示条的空间；非刘海屏 env() 为 0，等于没加。 */
+@layer utilities {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .pb-safe-nav {
+    /* 移动端内容区垫底：底部固定标签栏本体高度 + 安全区。
+       桌面端没有底部标签栏，用响应式覆盖回普通间距（媒体查询在同一 layer 内靠后，稳定生效）。 */
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 768px) {
+    .pb-safe-nav {
+      padding-bottom: 1.5rem;
+    }
   }
 }
 

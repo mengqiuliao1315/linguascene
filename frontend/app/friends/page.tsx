@@ -184,7 +184,7 @@ function FriendsView() {
             ))}
           </aside>
 
-          <section className="card flex h-[32rem] flex-col p-0 lg:col-span-2">
+          <section className="card flex h-[60vh] flex-col p-0 lg:col-span-2 lg:h-[32rem]">
             {activeFriend ? (
               <>
                 <header className="flex items-center gap-3 border-b border-slate-100 p-4">

@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 
-import { ErrorText } from "@/components/ui";
+import { ErrorText, Modal } from "@/components/ui";
+import { BASE_PATH } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+
+const APK_PATH = `${BASE_PATH}/download/linguascene.apk`;
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -11,6 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -26,7 +30,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-dvh">
       <div className="hidden flex-1 flex-col justify-between bg-brand-600 p-12 text-white lg:flex">
         <div className="flex items-center gap-2 text-lg font-semibold">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
@@ -95,11 +99,42 @@ export default function LoginPage() {
             {submitting ? "登录中…" : "登录"}
           </button>
 
-          <p className="text-center text-xs text-slate-400">
-            账号由管理员统一开通
-          </p>
+          <div className="flex flex-col items-center gap-2 pt-1">
+            <p className="text-center text-xs text-slate-400">
+              账号由管理员统一开通
+            </p>
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              className="text-xs text-slate-400 underline decoration-slate-200 underline-offset-2 transition hover:text-brand-600"
+            >
+              📱 下载 Android 客户端
+            </button>
+          </div>
         </form>
       </div>
+
+      <Modal
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        title="下载 Android 客户端"
+        maxWidth="max-w-xs"
+      >
+        <div className="flex flex-col items-center gap-3">
+          {/* 二维码为构建期生成的静态资源，扫码直达 APK 下载地址 */}
+          <img
+            src={`${BASE_PATH}/download/qr-apk.svg`}
+            alt="扫码下载 LinguaScene Android 安装包"
+            className="h-44 w-44 rounded-xl border border-slate-200 bg-white p-2"
+          />
+          <p className="text-center text-xs leading-relaxed text-slate-500">
+            用手机扫码下载安装包。若系统提示「未知来源」，请允许本次安装。
+          </p>
+          <a href={APK_PATH} download className="btn-primary w-full">
+            直接下载安装包
+          </a>
+        </div>
+      </Modal>
     </div>
   );
 }

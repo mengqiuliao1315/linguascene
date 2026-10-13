@@ -157,7 +157,7 @@ export function WordPopover({
 
   return (
     <div
-      className="fixed z-40 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
+      className="fixed z-40 max-h-[70vh] w-[min(18rem,calc(100vw_-_1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
       style={{
         left: Math.max(12, Math.min(position.x, window.innerWidth - 300)),
         top: Math.max(12, Math.min(position.y + 12, window.innerHeight - 280)),

@@ -425,7 +425,7 @@ function AdminConsole() {
           {users.map((user) => (
             <div
               key={user.id}
-              className="flex flex-wrap items-center gap-4 px-5 py-4"
+              className="flex flex-wrap items-center gap-3 px-4 py-4 sm:gap-4 sm:px-5"
             >
               <Avatar
                 username={user.username}
@@ -442,7 +442,7 @@ function AdminConsole() {
                     <span className="chip-brand">管理员</span>
                   ) : null}
                 </div>
-                <p className="text-xs text-slate-400">{user.email}</p>
+                <p className="break-all text-xs text-slate-400">{user.email}</p>
                 {user.password_updated_at ? (
                   <p className="mt-0.5 text-[11px] text-slate-400">
                     密码更新于{" "}
@@ -457,7 +457,7 @@ function AdminConsole() {
                 <span>🔥 {user.streak}</span>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => shareAccount(user)}
                   disabled={busyId === user.id}

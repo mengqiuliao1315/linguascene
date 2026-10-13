@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LinguaScene</string>
+    <string name="title_activity_main">LinguaScene</string>
+    <string name="package_name">icu.forddream.linguascene</string>
+    <string name="custom_url_scheme">icu.forddream.linguascene</string>
+</resources>

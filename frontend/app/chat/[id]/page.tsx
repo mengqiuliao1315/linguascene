@@ -199,7 +199,7 @@ function SentenceCard({
 }) {
   return (
     <div
-      className="fixed z-40 w-80 max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
+      className="fixed z-40 w-[min(20rem,calc(100vw_-_1.5rem))] max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
       style={{
         left: Math.max(
           12,

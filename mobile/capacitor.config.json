@@ -1,0 +1,13 @@
+{
+  "appId": "icu.forddream.linguascene",
+  "appName": "LinguaScene",
+  "webDir": "www",
+  "server": {
+    "url": "https://forddream.icu/linguascene",
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

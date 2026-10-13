@@ -99,7 +99,7 @@ export function SelectionToolbar({
           </button>
         </div>
       ) : (
-        <div className="w-72 space-y-2">
+        <div className="w-[min(18rem,calc(100vw_-_1.5rem))] space-y-2">
           <p className="truncate text-xs font-medium text-slate-700">
             {selection.text}
           </p>
