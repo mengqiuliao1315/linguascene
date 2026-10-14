@@ -155,14 +155,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
-export type ExportDelivery = "share" | "download" | "cancelled";
+export type ExportDelivery = "link" | "download";
 
 export interface ExportResult {
+  /** link：已把带票据的下载地址交给浏览器；download：浏览器直接下载了 blob。 */
   delivery: ExportDelivery;
-  /**
-   * 已生成 PDF 的临时地址（导出后 5 分钟内有效）。
-   * 移动端浏览器/WebView 可能拦截程序化下载，用户可据此手动打开或保存。
-   */
+  /** 可供用户手动打开的下载地址（link 时是服务端地址，download 时是 5 分钟内有效的 blob）。 */
   url: string | null;
 }
 
@@ -314,15 +312,29 @@ export const readingApi = {
       method: "POST",
     }),
 
+  exportTicket: (kind: MaterialKind, id: number) =>
+    request<{ path: string; expires_in: number }>(
+      `/api/reading/materials/${kind}/${id}/export-ticket`,
+      { method: "POST" }
+    ),
+
   exportPdf: async (
     kind: MaterialKind,
     id: number,
     filename: string
   ): Promise<ExportResult> => {
+    // 触屏设备（手机浏览器 / App 内嵌 WebView）保存不了 blob：App 的 WebView 既
+    // 没有下载能力，window.open 也不生效。所以改成先签一张短时效票据，把地址交给
+    // 浏览器去下载——浏览器能正常把文件存到手机里。
+    if (isTouchDevice()) {
+      const handedOff = await handOffToBrowser(kind, id);
+      if (handedOff) return handedOff;
+    }
+
     for (let attempt = 0; attempt < EXPORT_ATTEMPTS; attempt += 1) {
       try {
         const blob = await fetchExportBlob(kind, id);
-        return await deliverExport(blob, filename);
+        return downloadBlob(blob, filename);
       } catch (err) {
         if (err instanceof ApiError) throw err;
 
@@ -385,18 +397,51 @@ function sanitizeFilename(name: string): string {
   return `${base}.pdf`;
 }
 
-/**
- * 交付生成的 PDF：触屏设备优先走系统分享面板（可直接「存储到文件 / 下载 / 发给好友」），
- * 其余情况走浏览器下载。移动端浏览器与 WebView 常会拦掉程序化下载，
- * 因此同时返回临时地址，供页面在下载无反应时手动打开。
- */
-async function deliverExport(blob: Blob, filename: string): Promise<ExportResult> {
-  const safeName = sanitizeFilename(filename);
+// Capacitor 打包的 App 只是把线上站点塞进 WebView：它会把「非同源主机」的链接
+// 交给系统浏览器处理（见 Bridge.launchIntent），而它自己没有任何下载能力。
+// 所以移动端下载统一走 www 主机，让 App 唤起浏览器完成保存。
+const BROWSER_DOWNLOAD_HOST = "www.forddream.icu";
 
-  if (isTouchDevice() && (await shareBlob(blob, safeName))) {
-    return { delivery: "share", url: null };
+function browserDownloadUrl(path: string): string {
+  const { protocol, hostname } = window.location;
+  const host = hostname === "forddream.icu" ? BROWSER_DOWNLOAD_HOST : hostname;
+  return `${protocol}//${host}${path}`;
+}
+
+/**
+ * 签一张短时效票据，把带票据的下载地址交给浏览器。
+ * 票据接口失败时返回 null，交给外面的 blob 下载兜底。
+ */
+async function handOffToBrowser(
+  kind: MaterialKind,
+  id: number
+): Promise<ExportResult | null> {
+  let path: string;
+  try {
+    const ticket = await readingApi.exportTicket(kind, id);
+    path = ticket.path;
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+      throw err;
+    }
+    return null;
   }
 
+  const url = browserDownloadUrl(`${API_BASE}${path}`);
+  // 用一次真实的链接点击把地址交给 WebView：Capacitor 会拦截这次导航，
+  // 因为主机不是 App 自己的域名，于是转交系统浏览器下载。
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return { delivery: "link", url };
+}
+
+function downloadBlob(blob: Blob, filename: string): ExportResult {
+  const safeName = sanitizeFilename(filename);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -408,34 +453,6 @@ async function deliverExport(blob: Blob, filename: string): Promise<ExportResult
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), EXPORT_URL_TTL_MS);
   return { delivery: "download", url };
-}
-
-async function shareBlob(blob: Blob, filename: string): Promise<boolean> {
-  const nav = navigator as Navigator & {
-    canShare?: (data?: ShareData) => boolean;
-    share?: (data?: ShareData) => Promise<void>;
-  };
-  if (typeof nav.share !== "function" || typeof nav.canShare !== "function") {
-    return false;
-  }
-
-  const file = new File([blob], filename, {
-    type: blob.type || "application/pdf",
-  });
-  try {
-    if (!nav.canShare({ files: [file] })) return false;
-  } catch {
-    return false;
-  }
-
-  try {
-    await nav.share({ files: [file], title: filename });
-    return true;
-  } catch (err) {
-    // 用户主动取消分享面板，视为已处理，不再触发浏览器下载
-    if (err instanceof DOMException && err.name === "AbortError") return true;
-    return false;
-  }
 }
 
 function delay(ms: number): Promise<void> {

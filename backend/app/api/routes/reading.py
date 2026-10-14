@@ -1,6 +1,8 @@
 import json
 import logging
+import re
 from collections.abc import Iterator
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -13,15 +15,18 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_user_provider
 from app.core.database import SessionLocal, get_db
+from app.core.security import create_download_token, decode_download_token
 from app.core.storage import MAX_UPLOAD_BYTES
 from app.core.uploads import read_limited
 from app.models.content import UserContent
 from app.models.user import User
 from app.schemas.reading import (
+    ExportTicketOut,
     MaterialDetailOut,
     MaterialOut,
     NoteCreate,
@@ -35,6 +40,7 @@ from app.schemas.reading import (
     SuggestedSpanOut,
 )
 from app.services import (
+    ai_config_service,
     content_service,
     pdf_service,
     reading_service,
@@ -47,6 +53,9 @@ router = APIRouter(prefix="/api/reading", tags=["reading"])
 logger = logging.getLogger(__name__)
 
 _KINDS = ("article", "content")
+
+# 移动端下载票据有效期：足够用户切到浏览器并保存，又不至于长期可访问。
+EXPORT_TICKET_MINUTES = 10
 
 
 def _resolve_document(
@@ -609,16 +618,12 @@ def note_to_vocabulary(
     return _note_out(note, reading_service.vocabulary_word_set(db, user))
 
 
-@router.get("/materials/{kind}/{material_id}/export.pdf")
-def export_pdf(
-    kind: str,
-    material_id: int,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-    provider=Depends(get_user_provider),
-) -> Response:
+def _build_export_pdf(
+    db: Session, user: User, document: reading_service.Document, provider=None
+) -> bytes:
     """导出带批注栏的 PDF：左侧原文，右侧本句的重点词/搭配与个人笔记。"""
-    document = _resolve_document(db, user, kind, material_id)
+    if provider is None:
+        provider = ai_config_service.get_provider_for(db, user)
 
     payload = reading_service.analyze_document(
         db, user, document, provider=provider
@@ -630,17 +635,87 @@ def export_pdf(
     )
     db.commit()
 
-    pdf_bytes = pdf_service.build_reading_pdf(
+    return pdf_service.build_reading_pdf(
         title=document.title,
         author=document.author_name,
         level=document.level,
         sentences=sentences,
     )
 
+
+def _pdf_disposition(title: str) -> str:
+    """用文章标题做下载文件名，中文走 RFC 5987 的 filename* 才不会被截断。"""
+    stem = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", title).strip().strip(".") or "reading"
+    if stem.lower().endswith(".pdf"):
+        stem = stem[:-4]
+    ascii_stem = stem.encode("ascii", "ignore").decode("ascii").strip() or "reading"
+    return (
+        f'attachment; filename="{ascii_stem}.pdf"; '
+        f"filename*=UTF-8''{quote(f'{stem}.pdf')}"
+    )
+
+
+@router.get("/materials/{kind}/{material_id}/export.pdf")
+def export_pdf(
+    kind: str,
+    material_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    provider=Depends(get_user_provider),
+) -> Response:
+    """导出带批注栏的 PDF（需登录，桌面端下载用）。"""
+    document = _resolve_document(db, user, kind, material_id)
+    pdf_bytes = _build_export_pdf(db, user, document, provider=provider)
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="reading-{material_id}.pdf"'
-        },
+        headers={"Content-Disposition": _pdf_disposition(document.title)},
+    )
+
+
+@router.post(
+    "/materials/{kind}/{material_id}/export-ticket",
+    response_model=ExportTicketOut,
+)
+def export_ticket(
+    kind: str,
+    material_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> ExportTicketOut:
+    """签发一张短时效下载票据，供移动端把地址交给系统浏览器去下载。
+
+    App 内嵌 WebView 没有下载能力（Capacitor 不实现 DownloadListener），
+    所以移动端不能靠 blob 或程序化下载，只能走一个能被浏览器直接打开的地址。
+    """
+    _resolve_document(db, user, kind, material_id)
+    token = create_download_token(user.id, material_id, kind, EXPORT_TICKET_MINUTES)
+    return ExportTicketOut(
+        path=f"/api/reading/export.pdf?t={token}",
+        expires_in=EXPORT_TICKET_MINUTES * 60,
+    )
+
+
+@router.get("/export.pdf")
+def export_pdf_with_ticket(
+    t: str = Query(default=""),
+    db: Session = Depends(get_db),
+) -> Response:
+    """凭票据下载 PDF（无需登录头），票据只对该用户这篇材料有效。"""
+    info = decode_download_token(t) if t else None
+    if info is None:
+        raise HTTPException(status_code=404, detail="下载链接已失效，请回到页面重新导出")
+    user_id, material_id, kind = info
+    user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="下载链接已失效，请回到页面重新导出")
+
+    document = _resolve_document(db, user, kind, material_id)
+    pdf_bytes = _build_export_pdf(db, user, document)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": _pdf_disposition(document.title)},
     )

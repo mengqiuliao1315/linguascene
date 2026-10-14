@@ -864,9 +864,9 @@ function Workspace() {
         materialId,
         `${material.title}.pdf`
       );
-      // 移动端走的是浏览器下载（分享面板不可用）：部分 WebView 会静默拦截，
-      // 给出一个可手动打开的地址兜底。
-      if (result.delivery === "download" && isTouchDevice()) {
+      // 移动端没法保存 blob，会把带票据的地址交给浏览器下载；给出同一个地址，
+      // 万一 App 没唤起浏览器也能手动点开。
+      if (result.url && isTouchDevice()) {
         setExportHint(result);
       }
     } catch (err) {
@@ -1056,17 +1056,11 @@ function Workspace() {
 
       {exportHint ? (
         <div className="flex flex-wrap items-center gap-x-1 gap-y-1 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-          <span>PDF 已生成。手机若没看到下载提示，请</span>
-          <button
-            type="button"
-            onClick={() =>
-              exportHint.url && window.open(exportHint.url, "_blank")
-            }
-            className="font-medium underline"
-          >
-            点这里打开
-          </button>
-          <span>，再用浏览器或分享菜单保存到手机。</span>
+          <span>PDF 已交给浏览器下载。手机若没反应，请</span>
+          <a href={exportHint.url ?? "#"} className="font-medium underline">
+            点这里在浏览器打开
+          </a>
+          <span>，再用浏览器菜单保存到手机。</span>
           <button
             type="button"
             onClick={() => setExportHint(null)}

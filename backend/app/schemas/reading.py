@@ -102,6 +102,14 @@ class SelectionAnalysisOut(BaseModel):
     generated: bool = False
 
 
+class ExportTicketOut(BaseModel):
+    """短时效下载票据：移动端 App 内 WebView 没法保存文件，
+    只能把带票据的地址交给系统浏览器去下载。"""
+
+    path: str
+    expires_in: int
+
+
 class NoteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
