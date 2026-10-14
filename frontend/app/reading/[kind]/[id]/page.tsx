@@ -18,7 +18,9 @@ import {
   COLOR_MASK,
   COLOR_ORDER,
   COLOR_STYLES,
+  isTouchDevice,
   readingApi,
+  type ExportResult,
   type MaterialDetail,
   type MaterialKind,
   type NoteColor,
@@ -320,6 +322,7 @@ function Workspace() {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportHint, setExportHint] = useState<ExportResult | null>(null);
   const [error, setError] = useState("");
   const [popover, setPopover] = useState<{
 
@@ -854,8 +857,18 @@ function Workspace() {
     if (!material) return;
     setExporting(true);
     setError("");
+    setExportHint(null);
     try {
-      await readingApi.exportPdf(kind, materialId, `${material.title}.pdf`);
+      const result = await readingApi.exportPdf(
+        kind,
+        materialId,
+        `${material.title}.pdf`
+      );
+      // 移动端走的是浏览器下载（分享面板不可用）：部分 WebView 会静默拦截，
+      // 给出一个可手动打开的地址兜底。
+      if (result.delivery === "download" && isTouchDevice()) {
+        setExportHint(result);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "导出失败");
     } finally {
@@ -1039,6 +1052,29 @@ function Workspace() {
 
       {error ? (
         <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{error}</p>
+      ) : null}
+
+      {exportHint ? (
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-1 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          <span>PDF 已生成。手机若没看到下载提示，请</span>
+          <button
+            type="button"
+            onClick={() =>
+              exportHint.url && window.open(exportHint.url, "_blank")
+            }
+            className="font-medium underline"
+          >
+            点这里打开
+          </button>
+          <span>，再用浏览器或分享菜单保存到手机。</span>
+          <button
+            type="button"
+            onClick={() => setExportHint(null)}
+            className="ml-auto text-emerald-600 underline"
+          >
+            知道了
+          </button>
+        </div>
       ) : null}
 
       {recentlyDeleted.length > 0 ? (

@@ -155,6 +155,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
+export type ExportDelivery = "share" | "download" | "cancelled";
+
+export interface ExportResult {
+  delivery: ExportDelivery;
+  /**
+   * 已生成 PDF 的临时地址（导出后 5 分钟内有效）。
+   * 移动端浏览器/WebView 可能拦截程序化下载，用户可据此手动打开或保存。
+   */
+  url: string | null;
+}
+
 export const readingApi = {
   materials: (source: string = "all") =>
     request<Material[]>(`/api/reading/materials?source=${source}`),
@@ -303,13 +314,15 @@ export const readingApi = {
       method: "POST",
     }),
 
-  exportPdf: async (kind: MaterialKind, id: number, filename: string) => {
-
+  exportPdf: async (
+    kind: MaterialKind,
+    id: number,
+    filename: string
+  ): Promise<ExportResult> => {
     for (let attempt = 0; attempt < EXPORT_ATTEMPTS; attempt += 1) {
       try {
         const blob = await fetchExportBlob(kind, id);
-        triggerDownload(blob, filename);
-        return;
+        return await deliverExport(blob, filename);
       } catch (err) {
         if (err instanceof ApiError) throw err;
 
@@ -322,6 +335,7 @@ export const readingApi = {
         await delay(EXPORT_RETRY_DELAY_MS);
       }
     }
+    throw new ApiError(0, "导出失败");
   },
 };
 
@@ -353,15 +367,75 @@ async function fetchExportBlob(kind: MaterialKind, id: number): Promise<Blob> {
   }
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
+export function isTouchDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    "ontouchstart" in window ||
+    (window.matchMedia?.("(pointer: coarse)").matches ?? false)
+  );
+}
+
+function sanitizeFilename(name: string): string {
+  const cleaned = name
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[. ]+$/g, "")
+    .trim();
+  const base = cleaned.replace(/\.pdf$/i, "") || "reading";
+  return `${base}.pdf`;
+}
+
+/**
+ * 交付生成的 PDF：触屏设备优先走系统分享面板（可直接「存储到文件 / 下载 / 发给好友」），
+ * 其余情况走浏览器下载。移动端浏览器与 WebView 常会拦掉程序化下载，
+ * 因此同时返回临时地址，供页面在下载无反应时手动打开。
+ */
+async function deliverExport(blob: Blob, filename: string): Promise<ExportResult> {
+  const safeName = sanitizeFilename(filename);
+
+  if (isTouchDevice() && (await shareBlob(blob, safeName))) {
+    return { delivery: "share", url: null };
+  }
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = filename;
+  link.download = safeName;
+  link.rel = "noopener";
+  link.style.display = "none";
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  setTimeout(() => URL.revokeObjectURL(url), EXPORT_URL_TTL_MS);
+  return { delivery: "download", url };
+}
+
+async function shareBlob(blob: Blob, filename: string): Promise<boolean> {
+  const nav = navigator as Navigator & {
+    canShare?: (data?: ShareData) => boolean;
+    share?: (data?: ShareData) => Promise<void>;
+  };
+  if (typeof nav.share !== "function" || typeof nav.canShare !== "function") {
+    return false;
+  }
+
+  const file = new File([blob], filename, {
+    type: blob.type || "application/pdf",
+  });
+  try {
+    if (!nav.canShare({ files: [file] })) return false;
+  } catch {
+    return false;
+  }
+
+  try {
+    await nav.share({ files: [file], title: filename });
+    return true;
+  } catch (err) {
+    // 用户主动取消分享面板，视为已处理，不再触发浏览器下载
+    if (err instanceof DOMException && err.name === "AbortError") return true;
+    return false;
+  }
 }
 
 function delay(ms: number): Promise<void> {
@@ -422,6 +496,8 @@ async function streamSse(
 }
 
 const EXPORT_TIMEOUT_MS = 30_000;
+
+const EXPORT_URL_TTL_MS = 5 * 60_000;
 
 const EXPORT_ATTEMPTS = 2;
 const EXPORT_RETRY_DELAY_MS = 800;
