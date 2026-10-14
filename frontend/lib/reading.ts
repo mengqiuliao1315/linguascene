@@ -323,9 +323,7 @@ export const readingApi = {
     id: number,
     filename: string
   ): Promise<ExportResult> => {
-    // 触屏设备（手机浏览器 / App 内嵌 WebView）保存不了 blob：App 的 WebView 既
-    // 没有下载能力，window.open 也不生效。所以改成先签一张短时效票据，把地址交给
-    // 浏览器去下载——浏览器能正常把文件存到手机里。
+    // 手机端保存不了 blob，改由浏览器下载。
     if (isTouchDevice()) {
       const handedOff = await handOffToBrowser(kind, id);
       if (handedOff) return handedOff;
@@ -397,9 +395,7 @@ function sanitizeFilename(name: string): string {
   return `${base}.pdf`;
 }
 
-// Capacitor 打包的 App 只是把线上站点塞进 WebView：它会把「非同源主机」的链接
-// 交给系统浏览器处理（见 Bridge.launchIntent），而它自己没有任何下载能力。
-// 所以移动端下载统一走 www 主机，让 App 唤起浏览器完成保存。
+// App 端 WebView 无法保存文件，换成 www 主机后由系统浏览器接手下载。
 const BROWSER_DOWNLOAD_HOST = "www.forddream.icu";
 
 function browserDownloadUrl(path: string): string {
@@ -408,10 +404,7 @@ function browserDownloadUrl(path: string): string {
   return `${protocol}//${host}${path}`;
 }
 
-/**
- * 签一张短时效票据，把带票据的下载地址交给浏览器。
- * 票据接口失败时返回 null，交给外面的 blob 下载兜底。
- */
+/** 签一张短时效票据，把下载地址交给浏览器；拿不到票据时返回 null 走兜底。 */
 async function handOffToBrowser(
   kind: MaterialKind,
   id: number
@@ -428,8 +421,6 @@ async function handOffToBrowser(
   }
 
   const url = browserDownloadUrl(`${API_BASE}${path}`);
-  // 用一次真实的链接点击把地址交给 WebView：Capacitor 会拦截这次导航，
-  // 因为主机不是 App 自己的域名，于是转交系统浏览器下载。
   const link = document.createElement("a");
   link.href = url;
   link.rel = "noopener";

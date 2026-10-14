@@ -103,8 +103,7 @@ class SelectionAnalysisOut(BaseModel):
 
 
 class ExportTicketOut(BaseModel):
-    """短时效下载票据：移动端 App 内 WebView 没法保存文件，
-    只能把带票据的地址交给系统浏览器去下载。"""
+    """短时效下载票据，供移动端交给浏览器下载 PDF。"""
 
     path: str
     expires_in: int

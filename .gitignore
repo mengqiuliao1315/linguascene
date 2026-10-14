@@ -27,3 +27,6 @@ rollback/
 
 # 移动端安装包（构建产物，由本地 scp 上传到服务器，不进仓库）
 frontend/public/download/*.apk
+
+# 本地生成的文档产物
+output/

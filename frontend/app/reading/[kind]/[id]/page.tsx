@@ -864,8 +864,7 @@ function Workspace() {
         materialId,
         `${material.title}.pdf`
       );
-      // 移动端没法保存 blob，会把带票据的地址交给浏览器下载；给出同一个地址，
-      // 万一 App 没唤起浏览器也能手动点开。
+      // 移动端改由浏览器下载，把这个地址也留给用户手动打开。
       if (result.url && isTouchDevice()) {
         setExportHint(result);
       }

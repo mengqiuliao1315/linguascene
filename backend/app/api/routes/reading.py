@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 _KINDS = ("article", "content")
 
-# 移动端下载票据有效期：足够用户切到浏览器并保存，又不至于长期可访问。
+# 下载票据有效期（分钟）：够切换浏览器保存，又不会长期可访问。
 EXPORT_TICKET_MINUTES = 10
 
 
@@ -684,11 +684,7 @@ def export_ticket(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> ExportTicketOut:
-    """签发一张短时效下载票据，供移动端把地址交给系统浏览器去下载。
-
-    App 内嵌 WebView 没有下载能力（Capacitor 不实现 DownloadListener），
-    所以移动端不能靠 blob 或程序化下载，只能走一个能被浏览器直接打开的地址。
-    """
+    """签发短时效下载票据：移动端把带票据的地址交给浏览器打开下载。"""
     _resolve_document(db, user, kind, material_id)
     token = create_download_token(user.id, material_id, kind, EXPORT_TICKET_MINUTES)
     return ExportTicketOut(
